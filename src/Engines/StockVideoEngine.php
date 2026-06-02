@@ -195,7 +195,7 @@ class StockVideoEngine
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
         
-        $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25";
+        $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps=25";
         
         $command = [
             $ffmpegPath, '-y', 

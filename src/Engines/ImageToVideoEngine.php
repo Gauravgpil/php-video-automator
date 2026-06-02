@@ -17,6 +17,7 @@ class ImageToVideoEngine
     protected ?string $audioPath = null;
     protected int $width = 1080;
     protected int $height = 1920;
+    protected int $imageDuration = 4;
 
     public function __construct(array $config)
     {
@@ -65,6 +66,12 @@ class ImageToVideoEngine
     {
         $this->width = $width;
         $this->height = $height;
+        return $this;
+    }
+
+    public function setImageDuration(int $seconds): self
+    {
+        $this->imageDuration = $seconds;
         return $this;
     }
 
@@ -145,19 +152,20 @@ class ImageToVideoEngine
     protected function createClipFromImage(string $imagePath, string $outputPath, string $text = ''): void
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-        $duration = 4;
+        $duration = $this->imageDuration;
 
-        $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2,setsar=1";
+        $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
         
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
             $filter .= ",zoompan=z='min(zoom+0.0015,1.5)':d={$duration}*25:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'";
         }
 
         if ($text !== '') {
-            $escapedText = str_replace(["\\", "'", ":"], ["\\\\", "\\\\'", "\\:"], $text);
+            $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
+            file_put_contents($txtPath, $text);
             $fontPath = $this->config['font_path'] ?? '';
             $fontStr = $fontPath ? "fontfile='{$fontPath}':" : "";
-            $filter .= ",drawtext=text='{$escapedText}':{$fontStr}fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
+            $filter .= ",drawtext=textfile='{$txtPath}':{$fontStr}fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
         }
 
         $command = [
