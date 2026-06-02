@@ -155,7 +155,9 @@ class ImageToVideoEngine
 
         if ($text !== '') {
             $escapedText = str_replace(["\\", "'", ":"], ["\\\\", "\\\\'", "\\:"], $text);
-            $filter .= ",drawtext=text='{$escapedText}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
+            $fontPath = $this->config['font_path'] ?? '';
+            $fontStr = $fontPath ? "fontfile='{$fontPath}':" : "";
+            $filter .= ",drawtext=text='{$escapedText}':{$fontStr}fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
         }
 
         $command = [

@@ -18,6 +18,7 @@ class StockVideoEngine
     protected ?string $audioPath = null;
     protected int $width = 1080;
     protected int $height = 1920;
+    protected int $maxClipDuration = 5;
 
     public function __construct(array $config)
     {
@@ -40,6 +41,12 @@ class StockVideoEngine
     {
         $this->width = $width;
         $this->height = $height;
+        return $this;
+    }
+
+    public function setMaxClipDuration(int $seconds): self
+    {
+        $this->maxClipDuration = $seconds;
         return $this;
     }
 
@@ -191,9 +198,12 @@ class StockVideoEngine
         $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25";
         
         $command = [
-            $ffmpegPath, '-y', '-i', $inputPath,
+            $ffmpegPath, '-y', 
+            '-i', $inputPath,
+            '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
-            '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p',
+            '-c:v', 'libx264', '-c:a', 'aac', '-t', (string)$this->maxClipDuration, '-pix_fmt', 'yuv420p',
+            '-shortest',
             $outputPath
         ];
 
