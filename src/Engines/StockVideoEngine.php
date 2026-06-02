@@ -130,6 +130,11 @@ class StockVideoEngine
             throw new VideoAutomatorException("No videos to process. Call fetchStockVideos() first.");
         }
 
+        $outDir = dirname($outputPath);
+        if (!is_dir($outDir)) {
+            @mkdir($outDir, 0777, true);
+        }
+
         $tempDir = sys_get_temp_dir() . '/video_automator_stock_' . uniqid();
         if (!mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
             throw new VideoAutomatorException(sprintf('Directory "%s" was not created', $tempDir));
@@ -140,7 +145,9 @@ class StockVideoEngine
             
             foreach ($this->videos as $index => $videoUrl) {
                 $rawPath = $tempDir . "/raw_{$index}.mp4";
-                file_put_contents($rawPath, file_get_contents($videoUrl));
+                if (!@copy($videoUrl, $rawPath)) {
+                    throw new VideoAutomatorException("Failed to download video from: " . $videoUrl);
+                }
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
                 $this->standardizeClip($rawPath, $clipPath);
@@ -164,7 +171,7 @@ class StockVideoEngine
             ];
 
             $process = new Process($command);
-            $process->setTimeout(300);
+            $process->setTimeout(3600);
             $process->run();
 
             if (!$process->isSuccessful()) {
@@ -178,7 +185,7 @@ class StockVideoEngine
                     $outputPath
                 ];
                 $audioProc = new Process($audioCmd);
-                $audioProc->setTimeout(300);
+                $audioProc->setTimeout(3600);
                 $audioProc->run();
                 if (!$audioProc->isSuccessful()) {
                     throw new VideoAutomatorException("FFMPEG Audio Merge Error: " . $audioProc->getErrorOutput());
@@ -208,7 +215,7 @@ class StockVideoEngine
         ];
 
         $process = new Process($command);
-        $process->setTimeout(120);
+        $process->setTimeout(3600);
         $process->run();
 
         if (!$process->isSuccessful()) {

@@ -81,6 +81,11 @@ class ImageToVideoEngine
             throw new VideoAutomatorException("No images to process. Call generateImages() first.");
         }
 
+        $outDir = dirname($outputPath);
+        if (!is_dir($outDir)) {
+            @mkdir($outDir, 0777, true);
+        }
+
         $tempDir = sys_get_temp_dir() . '/video_automator_img_' . uniqid();
         if (!mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
             throw new VideoAutomatorException(sprintf('Directory "%s" was not created', $tempDir));
@@ -91,7 +96,9 @@ class ImageToVideoEngine
             
             foreach ($this->images as $index => $imageUrl) {
                 $imagePath = $tempDir . "/img_{$index}.jpg";
-                file_put_contents($imagePath, file_get_contents($imageUrl));
+                if (!@copy($imageUrl, $imagePath)) {
+                    throw new VideoAutomatorException("Failed to download generated image.");
+                }
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
                 $text = $this->addCaptions ? $this->chunks[$index] : '';
@@ -116,7 +123,7 @@ class ImageToVideoEngine
             ];
 
             $process = new Process($command);
-            $process->setTimeout(300);
+            $process->setTimeout(3600);
             $process->run();
 
             if (!$process->isSuccessful()) {
@@ -130,7 +137,7 @@ class ImageToVideoEngine
                     $outputPath
                 ];
                 $audioProc = new Process($audioCmd);
-                $audioProc->setTimeout(300);
+                $audioProc->setTimeout(3600);
                 $audioProc->run();
                 if (!$audioProc->isSuccessful()) {
                     throw new VideoAutomatorException("FFMPEG Audio Merge Error: " . $audioProc->getErrorOutput());
@@ -176,7 +183,7 @@ class ImageToVideoEngine
         ];
 
         $process = new Process($command);
-        $process->setTimeout(120);
+        $process->setTimeout(3600);
         $process->run();
 
         if (!$process->isSuccessful()) {
