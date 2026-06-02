@@ -228,8 +228,8 @@ class StockVideoEngine
         if (!is_dir($dir)) return;
         $files = array_diff(scandir($dir), ['.','..']);
         foreach ($files as $file) {
-            unlink("$dir/$file");
+            @unlink("$dir/$file");
         }
-        rmdir($dir);
+        @rmdir($dir);
     }
 }
