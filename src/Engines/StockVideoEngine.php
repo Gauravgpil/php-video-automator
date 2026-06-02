@@ -135,7 +135,7 @@ class StockVideoEngine
             @mkdir($outDir, 0777, true);
         }
 
-        $tempDir = sys_get_temp_dir() . '/video_automator_stock_' . uniqid();
+        $tempDir = sys_get_temp_dir() . '/video_automator_stock_' . uniqid('', true);
         if (!mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
             throw new VideoAutomatorException(sprintf('Directory "%s" was not created', $tempDir));
         }

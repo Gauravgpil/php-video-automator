@@ -13,7 +13,10 @@ class PixabayService
     public function __construct(string $apiKey)
     {
         $this->apiKey = $apiKey;
-        $this->client = new Client(['base_uri' => 'https://pixabay.com/api/']);
+        $this->client = new Client([
+            'base_uri' => 'https://pixabay.com/api/',
+            'timeout'  => 30,
+        ]);
     }
 
     public function searchVideos(string $query, int $perPage = 10): array

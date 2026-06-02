@@ -15,7 +15,7 @@ class AiImageService
     {
         $this->apiKey = $apiKey;
         $this->provider = $provider;
-        $this->client = new Client();
+        $this->client = new Client(['timeout' => 60]);
     }
 
     public function generateImage(string $prompt, string $size = '1024x1024'): string

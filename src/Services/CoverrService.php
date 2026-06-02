@@ -18,7 +18,8 @@ class CoverrService
             'headers' => [
                 'Authorization' => 'Bearer ' . $this->apiKey,
                 'Accept'        => 'application/json',
-            ]
+            ],
+            'timeout' => 30,
         ]);
     }
 

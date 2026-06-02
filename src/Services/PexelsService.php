@@ -17,7 +17,8 @@ class PexelsService
             'base_uri' => 'https://api.pexels.com/videos/',
             'headers' => [
                 'Authorization' => $this->apiKey
-            ]
+            ],
+            'timeout' => 30,
         ]);
     }
 

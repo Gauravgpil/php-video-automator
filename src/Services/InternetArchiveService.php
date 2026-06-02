@@ -12,7 +12,8 @@ class InternetArchiveService
     public function __construct()
     {
         $this->client = new Client([
-            'base_uri' => 'https://archive.org/'
+            'base_uri' => 'https://archive.org/',
+            'timeout'  => 30,
         ]);
     }
 

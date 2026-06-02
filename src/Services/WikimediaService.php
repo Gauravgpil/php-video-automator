@@ -15,7 +15,8 @@ class WikimediaService
             'base_uri' => 'https://commons.wikimedia.org/w/api.php',
             'headers' => [
                 'User-Agent' => 'PhpVideoAutomator/1.0'
-            ]
+            ],
+            'timeout' => 30,
         ]);
     }
 
