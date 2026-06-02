@@ -107,7 +107,7 @@ class StockVideoEngine
                 }
             } elseif ($provider === 'coverr') {
                 $url = $video['urls']['mp4'] ?? $video['video_url'] ?? $video['src'] ?? '';
-            } elseif ($provider === 'wikimedia' || $provider === 'archive') {
+            } else {
                 $url = $video['url'] ?? '';
             }
 

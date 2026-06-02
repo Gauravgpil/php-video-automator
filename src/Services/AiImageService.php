@@ -18,19 +18,19 @@ class AiImageService
         $this->client = new Client();
     }
 
-    public function generateImage(string $prompt): string
+    public function generateImage(string $prompt, string $size = '1024x1024'): string
     {
         if ($this->provider === 'openai') {
-            return $this->generateWithOpenAi($prompt);
+            return $this->generateWithOpenAi($prompt, $size);
         }
         
         throw new VideoAutomatorException("Unsupported AI image provider: {$this->provider}");
     }
 
-    protected function generateWithOpenAi(string $prompt): string
+    protected function generateWithOpenAi(string $prompt, string $size): string
     {
         if (empty($this->apiKey)) {
-            return 'https://via.placeholder.com/1024x1024.png?text=' . urlencode(substr($prompt, 0, 50));
+            return 'https://via.placeholder.com/' . $size . '.png?text=' . urlencode(substr($prompt, 0, 50));
         }
 
         try {
@@ -43,7 +43,7 @@ class AiImageService
                     'model' => 'dall-e-3',
                     'prompt' => $prompt,
                     'n' => 1,
-                    'size' => '1024x1024'
+                    'size' => $size
                 ]
             ]);
 

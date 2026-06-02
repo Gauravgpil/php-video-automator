@@ -36,9 +36,13 @@ class ImageToVideoEngine
         $apiKey = $apiKey ?: ($this->config['ai_image_api_key'] ?? '');
         $service = new AiImageService($apiKey, $provider);
 
+        $size = '1024x1024';
+        if ($this->width < $this->height) $size = '1024x1792';
+        if ($this->width > $this->height) $size = '1792x1024';
+
         foreach ($this->chunks as $index => $chunk) {
             $prompt = "High quality cinematic representation of: " . $chunk;
-            $this->images[$index] = $service->generateImage($prompt);
+            $this->images[$index] = $service->generateImage($prompt, $size);
         }
 
         return $this;
