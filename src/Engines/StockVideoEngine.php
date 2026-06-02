@@ -15,6 +15,9 @@ class StockVideoEngine
     protected array $config;
     protected string $script = '';
     protected array $videos = [];
+    protected ?string $audioPath = null;
+    protected int $width = 1080;
+    protected int $height = 1920;
 
     public function __construct(array $config)
     {
@@ -24,6 +27,19 @@ class StockVideoEngine
     public function setScript(string $script): self
     {
         $this->script = $script;
+        return $this;
+    }
+
+    public function withAudio(string $audioPath): self
+    {
+        $this->audioPath = $audioPath;
+        return $this;
+    }
+
+    public function setDimensions(int $width, int $height): self
+    {
+        $this->width = $width;
+        $this->height = $height;
         return $this;
     }
 
@@ -104,7 +120,7 @@ class StockVideoEngine
     public function export(string $outputPath): bool
     {
         if (empty($this->videos)) {
-            throw new VideoAutomatorException("No videos to process. Call fetchFromPixabay() first.");
+            throw new VideoAutomatorException("No videos to process. Call fetchStockVideos() first.");
         }
 
         $tempDir = sys_get_temp_dir() . '/video_automator_stock_' . uniqid();
@@ -133,9 +149,11 @@ class StockVideoEngine
             file_put_contents($listPath, $listContent);
 
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
+            $rawOutput = $this->audioPath ? $tempDir . '/raw_output.mp4' : $outputPath;
+            
             $command = [
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
-                '-c', 'copy', $outputPath
+                '-c', 'copy', $rawOutput
             ];
 
             $process = new Process($command);
@@ -144,6 +162,20 @@ class StockVideoEngine
 
             if (!$process->isSuccessful()) {
                 throw new VideoAutomatorException("FFMPEG Concat Error: " . $process->getErrorOutput());
+            }
+
+            if ($this->audioPath && file_exists($this->audioPath)) {
+                $audioCmd = [
+                    $ffmpegPath, '-y', '-i', $rawOutput, '-i', $this->audioPath,
+                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest',
+                    $outputPath
+                ];
+                $audioProc = new Process($audioCmd);
+                $audioProc->setTimeout(300);
+                $audioProc->run();
+                if (!$audioProc->isSuccessful()) {
+                    throw new VideoAutomatorException("FFMPEG Audio Merge Error: " . $audioProc->getErrorOutput());
+                }
             }
 
             return true;
@@ -156,7 +188,7 @@ class StockVideoEngine
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
         
-        $filter = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25";
+        $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25";
         
         $command = [
             $ffmpegPath, '-y', '-i', $inputPath,

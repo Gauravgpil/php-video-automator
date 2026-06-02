@@ -14,6 +14,9 @@ class ImageToVideoEngine
     protected array $images = [];
     protected bool $addCaptions = false;
     protected string $animation = 'none';
+    protected ?string $audioPath = null;
+    protected int $width = 1080;
+    protected int $height = 1920;
 
     public function __construct(array $config)
     {
@@ -52,6 +55,19 @@ class ImageToVideoEngine
         return $this;
     }
 
+    public function withAudio(string $audioPath): self
+    {
+        $this->audioPath = $audioPath;
+        return $this;
+    }
+
+    public function setDimensions(int $width, int $height): self
+    {
+        $this->width = $width;
+        $this->height = $height;
+        return $this;
+    }
+
     public function export(string $outputPath): bool
     {
         if (empty($this->images)) {
@@ -85,9 +101,11 @@ class ImageToVideoEngine
             file_put_contents($listPath, $listContent);
 
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
+            $rawOutput = $this->audioPath ? $tempDir . '/raw_output.mp4' : $outputPath;
+            
             $command = [
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
-                '-c', 'copy', $outputPath
+                '-c', 'copy', $rawOutput
             ];
 
             $process = new Process($command);
@@ -96,6 +114,20 @@ class ImageToVideoEngine
 
             if (!$process->isSuccessful()) {
                 throw new VideoAutomatorException("FFMPEG Concat Error: " . $process->getErrorOutput());
+            }
+
+            if ($this->audioPath && file_exists($this->audioPath)) {
+                $audioCmd = [
+                    $ffmpegPath, '-y', '-i', $rawOutput, '-i', $this->audioPath,
+                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest',
+                    $outputPath
+                ];
+                $audioProc = new Process($audioCmd);
+                $audioProc->setTimeout(300);
+                $audioProc->run();
+                if (!$audioProc->isSuccessful()) {
+                    throw new VideoAutomatorException("FFMPEG Audio Merge Error: " . $audioProc->getErrorOutput());
+                }
             }
 
             return true;
@@ -115,14 +147,14 @@ class ImageToVideoEngine
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
         $duration = 4;
 
-        $filter = "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1";
+        $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=decrease,pad={$this->width}:{$this->height}:(ow-iw)/2:(oh-ih)/2,setsar=1";
         
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
             $filter .= ",zoompan=z='min(zoom+0.0015,1.5)':d={$duration}*25:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'";
         }
 
         if ($text !== '') {
-            $escapedText = str_replace(["'", ":"], ["\\\\'", "\\:"], $text);
+            $escapedText = str_replace(["\\", "'", ":"], ["\\\\", "\\\\'", "\\:"], $text);
             $filter .= ",drawtext=text='{$escapedText}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
         }
 
