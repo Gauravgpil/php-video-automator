@@ -168,7 +168,7 @@ class ImageToVideoEngine
         $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
         
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
-            $filter .= ",zoompan=z='min(zoom+0.0015,1.5)':d={$duration}*25:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'";
+            $filter .= ",zoompan=z='min(zoom+0.0015,1.5)':d={$duration}*25:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={$this->width}x{$this->height}";
         }
 
         if ($text !== '') {
