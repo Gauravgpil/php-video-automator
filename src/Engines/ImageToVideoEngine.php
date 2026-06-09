@@ -72,43 +72,7 @@ class ImageToVideoEngine
             $imageUrl = null;
             
             foreach ($providersToTry as $p) {
-                $key = $this->config["{$p}_api_key"] ?? '';
-                if (empty($key) && in_array($p, ['pixabay', 'pexels'])) continue;
-
-                try {
-                    if ($p === 'pixabay') {
-                        $service = new PixabayService($key);
-                        $results = $service->searchImages($query, 10);
-                        if (!empty($results)) {
-                            $result = $results[array_rand(array_slice($results, 0, 3))];
-                            $imageUrl = $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
-                        }
-                    } elseif ($p === 'pexels') {
-                        $service = new PexelsService($key);
-                        $results = $service->searchImages($query, 10);
-                        if (!empty($results)) {
-                            $result = $results[array_rand(array_slice($results, 0, 3))];
-                            $imageUrl = $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
-                        }
-                    } elseif ($p === 'wikimedia') {
-                        $service = new WikimediaService();
-                        $results = $service->searchImages($query, 10);
-                        if (!empty($results)) {
-                            $result = $results[array_rand(array_slice($results, 0, 3))];
-                            $imageUrl = $result['url'] ?? null;
-                        }
-                    } elseif ($p === 'archive') {
-                        $service = new InternetArchiveService();
-                        $results = $service->searchImages($query, 10);
-                        if (!empty($results)) {
-                            $result = $results[array_rand(array_slice($results, 0, 3))];
-                            $imageUrl = $result['url'] ?? null;
-                        }
-                    }
-                } catch (Exception $e) {
-                    continue;
-                }
-
+                $imageUrl = $this->searchProviderForImage($p, $query, true);
                 if ($imageUrl) {
                     break;
                 }
@@ -117,35 +81,7 @@ class ImageToVideoEngine
             if (!$imageUrl) {
                 $fallbackQuery = "scenery background abstract";
                 foreach ($providersToTry as $p) {
-                    $key = $this->config["{$p}_api_key"] ?? '';
-                    if (empty($key) && in_array($p, ['pixabay', 'pexels'])) continue;
-                    try {
-                        if ($p === 'pixabay') {
-                            $service = new PixabayService($key);
-                            $results = $service->searchImages($fallbackQuery, 10);
-                            if (!empty($results)) {
-                                $imageUrl = $results[0]['largeImageURL'] ?? ($results[0]['webformatURL'] ?? null);
-                            }
-                        } elseif ($p === 'pexels') {
-                            $service = new PexelsService($key);
-                            $results = $service->searchImages($fallbackQuery, 10);
-                            if (!empty($results)) {
-                                $imageUrl = $results[0]['src']['large2x'] ?? ($result['src']['large'] ?? null);
-                            }
-                        } elseif ($p === 'wikimedia') {
-                            $service = new WikimediaService();
-                            $results = $service->searchImages($fallbackQuery, 10);
-                            if (!empty($results)) {
-                                $imageUrl = $results[0]['url'] ?? null;
-                            }
-                        } elseif ($p === 'archive') {
-                            $service = new InternetArchiveService();
-                            $results = $service->searchImages($fallbackQuery, 10);
-                            if (!empty($results)) {
-                                $imageUrl = $results[0]['url'] ?? null;
-                            }
-                        }
-                    } catch (Exception $e) {}
+                    $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false);
                     if ($imageUrl) break;
                 }
             }
@@ -158,6 +94,48 @@ class ImageToVideoEngine
         }
 
         return $this;
+    }
+
+    private function searchProviderForImage(string $provider, string $query, bool $randomize = true): ?string
+    {
+        $key = $this->config["{$provider}_api_key"] ?? '';
+        if (empty($key) && in_array($provider, ['pixabay', 'pexels'])) return null;
+
+        try {
+            if ($provider === 'pixabay') {
+                $service = new PixabayService($key);
+                $results = $service->searchImages($query, 10);
+                if (!empty($results)) {
+                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
+                    return $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
+                }
+            } elseif ($provider === 'pexels') {
+                $service = new PexelsService($key);
+                $results = $service->searchImages($query, 10);
+                if (!empty($results)) {
+                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
+                    return $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
+                }
+            } elseif ($provider === 'wikimedia') {
+                $service = new WikimediaService();
+                $results = $service->searchImages($query, 10);
+                if (!empty($results)) {
+                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
+                    return $result['url'] ?? null;
+                }
+            } elseif ($provider === 'archive') {
+                $service = new InternetArchiveService();
+                $results = $service->searchImages($query, 10);
+                if (!empty($results)) {
+                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
+                    return $result['url'] ?? null;
+                }
+            }
+        } catch (Exception $e) {
+            // Ignore exception and try next provider
+        }
+
+        return null;
     }
 
     public function addAnimation(string $type = 'zoompan'): self
