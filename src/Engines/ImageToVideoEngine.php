@@ -41,7 +41,7 @@ class ImageToVideoEngine
         if ($this->width > $this->height) $size = '1792x1024';
 
         foreach ($this->chunks as $index => $chunk) {
-            $prompt = "High quality cinematic representation of: " . $chunk;
+            $prompt = "Create a high-quality, detailed image exactly matching this description: '" . trim($chunk) . "'. Adhere to any specific art style or medium requested. If none is specified, default to a photorealistic cinematic style.";
             $this->images[$index] = $service->generateImage($prompt, $size);
         }
 
