@@ -2,6 +2,7 @@
 
 namespace PhpVideoAutomator\Services;
 
+use Exception;
 use GuzzleHttp\Client;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 
@@ -35,8 +36,26 @@ class PexelsService
             $data = json_decode($response->getBody()->getContents(), true);
 
             return $data['videos'] ?? [];
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             throw new VideoAutomatorException("Failed to fetch videos from Pexels: " . $e->getMessage());
+        }
+    }
+
+    public function searchImages(string $query, int $perPage = 10): array
+    {
+        try {
+            $response = $this->client->get('https://api.pexels.com/v1/search', [
+                'query' => [
+                    'query' => $query,
+                    'per_page' => $perPage,
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            return $data['photos'] ?? [];
+        } catch (Exception $e) {
+            throw new VideoAutomatorException("Failed to fetch images from Pexels: " . $e->getMessage());
         }
     }
 }

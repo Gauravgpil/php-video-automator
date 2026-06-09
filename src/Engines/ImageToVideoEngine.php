@@ -34,6 +34,11 @@ class ImageToVideoEngine
     public function generateImages(string $apiKey = '', string $provider = 'openai'): self
     {
         $apiKey = $apiKey ?: ($this->config['ai_image_api_key'] ?? '');
+        
+        if (empty($apiKey)) {
+            return $this->fetchStockImages();
+        }
+
         $service = new AiImageService($apiKey, $provider);
 
         $size = '1024x1024';
@@ -43,6 +48,82 @@ class ImageToVideoEngine
         foreach ($this->chunks as $index => $chunk) {
             $prompt = "Create a high-quality, detailed image exactly matching this description: '" . trim($chunk) . "'. Adhere to any specific art style or medium requested. If none is specified, default to a photorealistic cinematic style.";
             $this->images[$index] = $service->generateImage($prompt, $size);
+        }
+
+        return $this;
+    }
+
+    public function fetchStockImages(string $provider = 'auto'): self
+    {
+        $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels'] : [$provider];
+
+        foreach ($this->chunks as $index => $chunk) {
+            $query = trim($chunk);
+            if (strlen($query) > 50) {
+                $queryWords = array_slice(explode(' ', $query), 0, 5);
+                $query = implode(' ', $queryWords);
+            }
+            
+            $imageUrl = null;
+            
+            foreach ($providersToTry as $p) {
+                $key = $this->config["{$p}_api_key"] ?? '';
+                if (empty($key)) continue;
+
+                try {
+                    if ($p === 'pixabay') {
+                        $service = new \PhpVideoAutomator\Services\PixabayService($key);
+                        $results = $service->searchImages($query, 10);
+                        if (!empty($results)) {
+                            $result = $results[array_rand(array_slice($results, 0, 3))];
+                            $imageUrl = $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
+                        }
+                    } elseif ($p === 'pexels') {
+                        $service = new \PhpVideoAutomator\Services\PexelsService($key);
+                        $results = $service->searchImages($query, 10);
+                        if (!empty($results)) {
+                            $result = $results[array_rand(array_slice($results, 0, 3))];
+                            $imageUrl = $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+
+                if ($imageUrl) {
+                    break;
+                }
+            }
+
+            if (!$imageUrl) {
+                $fallbackQuery = "scenery background abstract";
+                foreach ($providersToTry as $p) {
+                    $key = $this->config["{$p}_api_key"] ?? '';
+                    if (empty($key)) continue;
+                    try {
+                        if ($p === 'pixabay') {
+                            $service = new \PhpVideoAutomator\Services\PixabayService($key);
+                            $results = $service->searchImages($fallbackQuery, 10);
+                            if (!empty($results)) {
+                                $imageUrl = $results[0]['largeImageURL'] ?? ($results[0]['webformatURL'] ?? null);
+                            }
+                        } elseif ($p === 'pexels') {
+                            $service = new \PhpVideoAutomator\Services\PexelsService($key);
+                            $results = $service->searchImages($fallbackQuery, 10);
+                            if (!empty($results)) {
+                                $imageUrl = $results[0]['src']['large2x'] ?? ($result['src']['large'] ?? null);
+                            }
+                        }
+                    } catch (\Exception $e) {}
+                    if ($imageUrl) break;
+                }
+            }
+
+            if (!$imageUrl) {
+                throw new VideoAutomatorException("Could not fetch any stock image for the prompt.");
+            }
+
+            $this->images[$index] = $imageUrl;
         }
 
         return $this;
