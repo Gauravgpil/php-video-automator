@@ -2,6 +2,7 @@
 
 namespace PhpVideoAutomator\Services;
 
+use Exception;
 use GuzzleHttp\Client;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 
@@ -54,6 +55,47 @@ class InternetArchiveService
             return $results;
         } catch (\Exception $e) {
             throw new VideoAutomatorException("Failed to fetch videos from Internet Archive: " . $e->getMessage());
+        }
+    }
+
+    public function searchImages(string $query, int $limit = 10): array
+    {
+        try {
+            $response = $this->client->get('advancedsearch.php', [
+                'query' => [
+                    'q' => $query . ' AND mediatype:image',
+                    'fl[]' => 'identifier',
+                    'rows' => $limit,
+                    'page' => 1,
+                    'output' => 'json'
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+            $docs = $data['response']['docs'] ?? [];
+
+            $results = [];
+            foreach ($docs as $doc) {
+                $identifier = $doc['identifier'];
+                
+                $metaResponse = $this->client->get("metadata/{$identifier}");
+                $metaData = json_decode($metaResponse->getBody()->getContents(), true);
+
+                $files = $metaData['files'] ?? [];
+                foreach ($files as $file) {
+                    $name = strtolower($file['name'] ?? '');
+                    if (str_ends_with($name, '.jpg') || str_ends_with($name, '.jpeg') || str_ends_with($name, '.png')) {
+                        $results[] = [
+                            'url' => "https://archive.org/download/{$identifier}/" . $file['name']
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            return $results;
+        } catch (Exception $e) {
+            throw new VideoAutomatorException("Failed to fetch images from Internet Archive: " . $e->getMessage());
         }
     }
 }

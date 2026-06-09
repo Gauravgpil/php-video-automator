@@ -2,10 +2,13 @@
 
 namespace PhpVideoAutomator\Engines;
 
+use Exception;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
+use PhpVideoAutomator\Services\InternetArchiveService;
 use PhpVideoAutomator\Services\PexelsService;
 use PhpVideoAutomator\Services\PixabayService;
+use PhpVideoAutomator\Services\WikimediaService;
 use Symfony\Component\Process\Process;
 
 class ImageToVideoEngine
@@ -57,7 +60,7 @@ class ImageToVideoEngine
 
     public function fetchStockImages(string $provider = 'auto'): self
     {
-        $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels'] : [$provider];
+        $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
 
         foreach ($this->chunks as $index => $chunk) {
             $query = trim($chunk);
@@ -70,7 +73,7 @@ class ImageToVideoEngine
             
             foreach ($providersToTry as $p) {
                 $key = $this->config["{$p}_api_key"] ?? '';
-                if (empty($key)) continue;
+                if (empty($key) && in_array($p, ['pixabay', 'pexels'])) continue;
 
                 try {
                     if ($p === 'pixabay') {
@@ -87,8 +90,22 @@ class ImageToVideoEngine
                             $result = $results[array_rand(array_slice($results, 0, 3))];
                             $imageUrl = $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
                         }
+                    } elseif ($p === 'wikimedia') {
+                        $service = new WikimediaService();
+                        $results = $service->searchImages($query, 10);
+                        if (!empty($results)) {
+                            $result = $results[array_rand(array_slice($results, 0, 3))];
+                            $imageUrl = $result['url'] ?? null;
+                        }
+                    } elseif ($p === 'archive') {
+                        $service = new InternetArchiveService();
+                        $results = $service->searchImages($query, 10);
+                        if (!empty($results)) {
+                            $result = $results[array_rand(array_slice($results, 0, 3))];
+                            $imageUrl = $result['url'] ?? null;
+                        }
                     }
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     continue;
                 }
 
@@ -101,7 +118,7 @@ class ImageToVideoEngine
                 $fallbackQuery = "scenery background abstract";
                 foreach ($providersToTry as $p) {
                     $key = $this->config["{$p}_api_key"] ?? '';
-                    if (empty($key)) continue;
+                    if (empty($key) && in_array($p, ['pixabay', 'pexels'])) continue;
                     try {
                         if ($p === 'pixabay') {
                             $service = new PixabayService($key);
@@ -115,8 +132,20 @@ class ImageToVideoEngine
                             if (!empty($results)) {
                                 $imageUrl = $results[0]['src']['large2x'] ?? ($result['src']['large'] ?? null);
                             }
+                        } elseif ($p === 'wikimedia') {
+                            $service = new WikimediaService();
+                            $results = $service->searchImages($fallbackQuery, 10);
+                            if (!empty($results)) {
+                                $imageUrl = $results[0]['url'] ?? null;
+                            }
+                        } elseif ($p === 'archive') {
+                            $service = new InternetArchiveService();
+                            $results = $service->searchImages($fallbackQuery, 10);
+                            if (!empty($results)) {
+                                $imageUrl = $results[0]['url'] ?? null;
+                            }
                         }
-                    } catch (\Exception $e) {}
+                    } catch (Exception $e) {}
                     if ($imageUrl) break;
                 }
             }
