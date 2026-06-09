@@ -3,6 +3,7 @@
 namespace PhpVideoAutomator\Engines;
 
 use Exception;
+use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
 use PhpVideoAutomator\Services\InternetArchiveService;
@@ -132,6 +133,7 @@ class ImageToVideoEngine
                 }
             }
         } catch (Exception $e) {
+            Log::warning("Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
             // Ignore exception and try next provider
         }
 
