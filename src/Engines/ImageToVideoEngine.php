@@ -37,8 +37,8 @@ class ImageToVideoEngine
         $service = new AiImageService($apiKey, $provider);
 
         $size = '1024x1024';
-        if ($this->width < $this->height) $size = '1024x1792';
-        if ($this->width > $this->height) $size = '1792x1024';
+        if ($this->width < $this->height) $size = '1024x1536';
+        if ($this->width > $this->height) $size = '1536x1024';
 
         foreach ($this->chunks as $index => $chunk) {
             $prompt = "Create a high-quality, detailed image exactly matching this description: '" . trim($chunk) . "'. Adhere to any specific art style or medium requested. If none is specified, default to a photorealistic cinematic style.";
