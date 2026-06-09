@@ -4,6 +4,7 @@ namespace PhpVideoAutomator\Services;
 
 use Exception;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 
 class AiImageService
@@ -52,12 +53,9 @@ class AiImageService
 
             return $data['data'][0]['url'] ?? '';
         } catch (Exception $e) {
-            // Log the error for debugging
-            \Log::error('OpenAI Image Gen Error: ' . $e->getMessage());
+            Log::error('OpenAI Image Gen Error: ' . $e->getMessage());
 
-            // Check if it's a model availability/permission issue
             if (strpos($e->getMessage(), 'does not exist') !== false || strpos($e->getMessage(), 'model') !== false) {
-                // Try fallback to gpt-image-1-mini which is faster and cheaper
                 try {
                     $response = $this->client->post('https://api.openai.com/v1/images/generations', [
                         'headers' => [
@@ -68,7 +66,7 @@ class AiImageService
                             'model' => 'gpt-image-1-mini',
                             'prompt' => $prompt,
                             'n' => 1,
-                            'size' => '1024x1024' // Defaulting to square size for fallback safety
+                            'size' => '1024x1024'
                         ]
                     ]);
 
