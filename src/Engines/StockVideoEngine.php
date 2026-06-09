@@ -5,10 +5,10 @@ namespace PhpVideoAutomator\Engines;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\PixabayService;
 use PhpVideoAutomator\Services\PexelsService;
-use PhpVideoAutomator\Services\CoverrService;
 use PhpVideoAutomator\Services\WikimediaService;
 use PhpVideoAutomator\Services\InternetArchiveService;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 class StockVideoEngine
 {
@@ -50,34 +50,47 @@ class StockVideoEngine
         return $this;
     }
 
-    public function fetchStockVideos(string $provider = 'pixabay', string $apiKey = '', array $options = []): self
+    public function fetchStockVideos(string $provider = 'auto', string $apiKey = '', array $options = []): self
     {
-        $apiKey = $apiKey ?: ($this->config[$provider . '_api_key'] ?? '');
-        
         $query = substr($this->script, 0, 50);
         $results = [];
+        $activeProvider = '';
 
-        if ($provider === 'pixabay') {
-            $service = new PixabayService($apiKey);
-            $results = $service->searchVideos($query, 15);
-        } elseif ($provider === 'pexels') {
-            $service = new PexelsService($apiKey);
-            $results = $service->searchVideos($query, 15);
-        } elseif ($provider === 'coverr') {
-            $service = new CoverrService($apiKey);
-            $results = $service->searchVideos($query, 15);
-        } elseif ($provider === 'wikimedia') {
-            $service = new WikimediaService();
-            $results = $service->searchVideos($query, 15);
-        } elseif ($provider === 'archive') {
-            $service = new InternetArchiveService();
-            $results = $service->searchVideos($query, 15);
-        } else {
-            throw new VideoAutomatorException("Unsupported stock video provider: $provider");
+        $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
+
+        foreach ($providersToTry as $p) {
+            $key = $apiKey ?: ($this->config[$p . '_api_key'] ?? '');
+            
+            try {
+                if ($p === 'pixabay') {
+                    if (empty($key)) continue;
+                    $service = new PixabayService($key);
+                    $results = $service->searchVideos($query, 15);
+                } elseif ($p === 'pexels') {
+                    if (empty($key)) continue;
+                    $service = new PexelsService($key);
+                    $results = $service->searchVideos($query, 15);
+                } elseif ($p === 'wikimedia') {
+                    $service = new WikimediaService();
+                    $results = $service->searchVideos($query, 15);
+                } elseif ($p === 'archive') {
+                    $service = new InternetArchiveService();
+                    $results = $service->searchVideos($query, 15);
+                } else {
+                    throw new VideoAutomatorException("Unsupported stock video provider: $p");
+                }
+
+                if (!empty($results)) {
+                    $activeProvider = $p;
+                    break;
+                }
+            } catch (Throwable $e) {
+                continue;
+            }
         }
 
         if (empty($results)) {
-            throw new VideoAutomatorException("No videos found on $provider for query: $query");
+            throw new VideoAutomatorException("Render failed. The scene brief is too complex for this engine. Please try simplifying it.");
         }
 
         $randomize = $options['randomize'] ?? true;
@@ -92,9 +105,9 @@ class StockVideoEngine
         foreach ($selected as $video) {
             $url = '';
             
-            if ($provider === 'pixabay') {
+            if ($activeProvider === 'pixabay') {
                 $url = $video['videos']['tiny']['url'] ?? '';
-            } elseif ($provider === 'pexels') {
+            } elseif ($activeProvider === 'pexels') {
                 $files = $video['video_files'] ?? [];
                 foreach ($files as $file) {
                     if (($file['quality'] ?? '') === 'sd') {
@@ -105,8 +118,6 @@ class StockVideoEngine
                 if (!$url && !empty($files)) {
                     $url = $files[0]['link'];
                 }
-            } elseif ($provider === 'coverr') {
-                $url = $video['urls']['mp4'] ?? $video['video_url'] ?? $video['src'] ?? '';
             } else {
                 $url = $video['url'] ?? '';
             }

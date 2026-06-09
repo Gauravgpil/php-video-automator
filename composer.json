@@ -2,7 +2,7 @@
     "name": "gauravgpil/php-video-automator",
     "description": "A standalone PHP library to automatically generate videos from text scripts using FFMPEG, AI images, and stock footage.",
     "type": "library",
-    "keywords": ["video", "ffmpeg", "automation", "ai", "pixabay", "pexels", "coverr", "wikimedia", "archive", "generator"],
+    "keywords": ["video", "ffmpeg", "automation", "ai", "pixabay", "pexels", "wikimedia", "archive", "generator"],
     "license": "MIT",
     "authors": [
         {
