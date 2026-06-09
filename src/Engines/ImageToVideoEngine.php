@@ -164,11 +164,28 @@ class ImageToVideoEngine
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
         $duration = $this->imageDuration;
+        $w2 = $this->width * 2;
+        $h2 = $this->height * 2;
+        $fps = 25;
+        $frames = $duration * $fps;
 
-        $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
-        
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
-            $filter .= ",zoompan=z='min(zoom+0.0015,1.5)':d={$duration}*25:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={$this->width}x{$this->height}";
+            $filter = "[0:v]scale={$w2}:{$h2}:force_original_aspect_ratio=increase,crop={$w2}:{$h2},setsar=1";
+            
+            $effects = [
+                "z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
+                "z='if(eq(on,1),1.15,zoom-0.001)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
+                "z='1.1':x='(on/{$frames})*(iw-(iw/zoom))':y='ih/2-(ih/zoom/2)'",
+                "z='1.1':x='(1-(on/{$frames}))*(iw-(iw/zoom))':y='ih/2-(ih/zoom/2)'",
+                "z='1.1':x='iw/2-(iw/zoom/2)':y='(on/{$frames})*(ih-(ih/zoom))'",
+                "z='1.1':x='iw/2-(iw/zoom/2)':y='(1-(on/{$frames}))*(ih-(ih/zoom))'"
+            ];
+            
+            $effect = $effects[array_rand($effects)];
+            
+            $filter .= ",zoompan={$effect}:d={$frames}:s={$this->width}x{$this->height}:fps={$fps}";
+        } else {
+            $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
         }
 
         if ($text !== '') {
