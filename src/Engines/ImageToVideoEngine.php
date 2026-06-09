@@ -4,6 +4,8 @@ namespace PhpVideoAutomator\Engines;
 
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
+use PhpVideoAutomator\Services\PexelsService;
+use PhpVideoAutomator\Services\PixabayService;
 use Symfony\Component\Process\Process;
 
 class ImageToVideoEngine
@@ -72,14 +74,14 @@ class ImageToVideoEngine
 
                 try {
                     if ($p === 'pixabay') {
-                        $service = new \PhpVideoAutomator\Services\PixabayService($key);
+                        $service = new PixabayService($key);
                         $results = $service->searchImages($query, 10);
                         if (!empty($results)) {
                             $result = $results[array_rand(array_slice($results, 0, 3))];
                             $imageUrl = $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
                         }
                     } elseif ($p === 'pexels') {
-                        $service = new \PhpVideoAutomator\Services\PexelsService($key);
+                        $service = new PexelsService($key);
                         $results = $service->searchImages($query, 10);
                         if (!empty($results)) {
                             $result = $results[array_rand(array_slice($results, 0, 3))];
@@ -102,13 +104,13 @@ class ImageToVideoEngine
                     if (empty($key)) continue;
                     try {
                         if ($p === 'pixabay') {
-                            $service = new \PhpVideoAutomator\Services\PixabayService($key);
+                            $service = new PixabayService($key);
                             $results = $service->searchImages($fallbackQuery, 10);
                             if (!empty($results)) {
                                 $imageUrl = $results[0]['largeImageURL'] ?? ($results[0]['webformatURL'] ?? null);
                             }
                         } elseif ($p === 'pexels') {
-                            $service = new \PhpVideoAutomator\Services\PexelsService($key);
+                            $service = new PexelsService($key);
                             $results = $service->searchImages($fallbackQuery, 10);
                             if (!empty($results)) {
                                 $imageUrl = $results[0]['src']['large2x'] ?? ($result['src']['large'] ?? null);
