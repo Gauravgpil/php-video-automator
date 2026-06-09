@@ -42,7 +42,7 @@ class AiImageService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-image-1.5',
+                    'model' => 'gpt-image-2',
                     'prompt' => $prompt,
                     'n' => 1,
                     'size' => $size
@@ -50,8 +50,13 @@ class AiImageService
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
+            
+            $imageUrl = $this->parseImageResponse($data);
+            if (empty($imageUrl)) {
+                Log::warning('OpenAI API returned unrecognized format. Response: ' . json_encode($data));
+            }
 
-            return $data['data'][0]['url'] ?? '';
+            return $imageUrl;
         } catch (Exception $e) {
             Log::error('OpenAI Image Gen Error: ' . $e->getMessage());
 
@@ -63,20 +68,35 @@ class AiImageService
                             'Content-Type' => 'application/json',
                         ],
                         'json' => [
-                            'model' => 'gpt-image-1-mini',
+                            'model' => 'gpt-image-2',
                             'prompt' => $prompt,
                             'n' => 1,
-                            'size' => '1024x1024'
+                            'size' => $size
                         ]
                     ]);
 
                     $data = json_decode($response->getBody()->getContents(), true);
-                    return $data['data'][0]['url'] ?? '';
+                    return $this->parseImageResponse($data);
                 } catch (Exception $fallbackException) {
                     throw new VideoAutomatorException("Render failed. Your API account lacks permission for image generation. Please upgrade your API plan or check your billing.");
                 }
             }
             throw new VideoAutomatorException("Render failed. The AI engine encountered an error while processing your prompt.");
         }
+    }
+
+    protected function parseImageResponse(array $data): string
+    {
+        if (!empty($data['data'][0]['url'])) {
+            return $data['data'][0]['url'];
+        }
+
+        if (!empty($data['data'][0]['b64_json'])) {
+            $tempFile = sys_get_temp_dir() . '/' . uniqid('ai_img_') . '.png';
+            file_put_contents($tempFile, base64_decode($data['data'][0]['b64_json']));
+            return $tempFile;
+        }
+
+        return '';
     }
 }
