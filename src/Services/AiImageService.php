@@ -42,7 +42,7 @@ class AiImageService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-image-2',
+                    'model' => 'dall-e-3',
                     'prompt' => $prompt,
                     'n' => 1,
                     'size' => $size
@@ -60,6 +60,14 @@ class AiImageService
         } catch (Exception $e) {
             Log::error('OpenAI Image Gen Error: ' . $e->getMessage());
 
+            if (strpos($e->getMessage(), 'safety system') !== false) {
+                throw new VideoAutomatorException("Render failed. Your prompt was rejected by the AI safety system. Please revise your text to remove any sensitive or restricted content.");
+            }
+
+            if (strpos($e->getMessage(), 'billing') !== false || strpos($e->getMessage(), 'quota') !== false) {
+                throw new VideoAutomatorException("Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.");
+            }
+
             if (strpos($e->getMessage(), 'does not exist') !== false || strpos($e->getMessage(), 'model') !== false) {
                 try {
                     $response = $this->client->post('https://api.openai.com/v1/images/generations', [
@@ -68,7 +76,7 @@ class AiImageService
                             'Content-Type' => 'application/json',
                         ],
                         'json' => [
-                            'model' => 'gpt-image-2',
+                            'model' => 'dall-e-2',
                             'prompt' => $prompt,
                             'n' => 1,
                             'size' => $size
@@ -81,6 +89,7 @@ class AiImageService
                     throw new VideoAutomatorException("Render failed. Your API account lacks permission for image generation. Please upgrade your API plan or check your billing.");
                 }
             }
+            
             throw new VideoAutomatorException("Render failed. The AI engine encountered an error while processing your prompt.");
         }
     }
