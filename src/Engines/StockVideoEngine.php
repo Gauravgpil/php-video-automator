@@ -7,6 +7,7 @@ use PhpVideoAutomator\Services\PixabayService;
 use PhpVideoAutomator\Services\PexelsService;
 use PhpVideoAutomator\Services\WikimediaService;
 use PhpVideoAutomator\Services\InternetArchiveService;
+use PhpVideoAutomator\Services\AiTextService;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -25,10 +26,19 @@ class StockVideoEngine
         $this->config = $config;
     }
 
+    protected array $chunks = [];
+
     public function setScript(string $script): self
     {
         $this->script = $script;
+        $this->chunks = $this->splitIntoChunks($script);
         return $this;
+    }
+
+    protected function splitIntoChunks(string $script): array
+    {
+        $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
+        return array_values(array_filter(array_map('trim', $sentences)));
     }
 
     public function withAudio(string $audioPath): self
@@ -52,79 +62,108 @@ class StockVideoEngine
 
     public function fetchStockVideos(string $provider = 'auto', string $apiKey = '', array $options = []): self
     {
-        $query = substr($this->script, 0, 50);
-        $results = [];
-        $activeProvider = '';
+        $aiKey = $this->config['ai_image_api_key'] ?? '';
+        $textService = !empty($aiKey) ? new AiTextService($aiKey) : null;
+
+        $count = $options['count'] ?? 3;
+        $randomize = $options['randomize'] ?? true;
+        
+        $chunksToProcess = $this->chunks;
+        if (empty($chunksToProcess)) {
+            $chunksToProcess = [$this->script];
+        }
+
+        $numChunks = count($chunksToProcess);
+        $videosPerChunk = array_fill(0, $numChunks, 0);
+        $remaining = $count;
+        
+        $i = 0;
+        while ($remaining > 0) {
+            $videosPerChunk[$i]++;
+            $remaining--;
+            $i = ($i + 1) % $numChunks;
+        }
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
 
-        foreach ($providersToTry as $p) {
-            $key = $apiKey ?: ($this->config[$p . '_api_key'] ?? '');
-            
-            try {
-                if ($p === 'pixabay') {
-                    if (empty($key)) continue;
-                    $service = new PixabayService($key);
-                    $results = $service->searchVideos($query, 15);
-                } elseif ($p === 'pexels') {
-                    if (empty($key)) continue;
-                    $service = new PexelsService($key);
-                    $results = $service->searchVideos($query, 15);
-                } elseif ($p === 'wikimedia') {
-                    $service = new WikimediaService();
-                    $results = $service->searchVideos($query, 15);
-                } elseif ($p === 'archive') {
-                    $service = new InternetArchiveService();
-                    $results = $service->searchVideos($query, 15);
-                } else {
-                    throw new VideoAutomatorException("Unsupported stock video provider: $p");
-                }
+        foreach ($chunksToProcess as $index => $chunk) {
+            $videosNeeded = $videosPerChunk[$index] ?? 0;
+            if ($videosNeeded <= 0) continue;
 
-                if (!empty($results)) {
-                    $activeProvider = $p;
-                    break;
-                }
-            } catch (Throwable $e) {
-                continue;
+            $query = $chunk;
+            if ($textService) {
+                $query = $textService->extractStockVideoKeywords($chunk);
             }
-        }
 
-        if (empty($results)) {
-            throw new VideoAutomatorException("Render failed. The scene brief is too complex for this engine. Please try simplifying it.");
-        }
+            if (strlen($query) > 100) {
+                $query = substr($query, 0, 100);
+            }
 
-        $randomize = $options['randomize'] ?? true;
-        $count = $options['count'] ?? 3;
+            $results = [];
+            $activeProvider = '';
 
-        if ($randomize) {
-            shuffle($results);
-        }
+            foreach ($providersToTry as $p) {
+                $key = $apiKey ?: ($this->config[$p . '_api_key'] ?? '');
+                
+                try {
+                    if ($p === 'pixabay') {
+                        if (empty($key)) continue;
+                        $service = new PixabayService($key);
+                        $results = $service->searchVideos($query, 15);
+                    } elseif ($p === 'pexels') {
+                        if (empty($key)) continue;
+                        $service = new PexelsService($key);
+                        $results = $service->searchVideos($query, 15);
+                    } elseif ($p === 'wikimedia') {
+                        $service = new WikimediaService();
+                        $results = $service->searchVideos($query, 15);
+                    } elseif ($p === 'archive') {
+                        $service = new InternetArchiveService();
+                        $results = $service->searchVideos($query, 15);
+                    }
 
-        $selected = array_slice($results, 0, $count);
-
-        foreach ($selected as $video) {
-            $url = '';
-            
-            if ($activeProvider === 'pixabay') {
-                $url = $video['videos']['tiny']['url'] ?? '';
-            } elseif ($activeProvider === 'pexels') {
-                $files = $video['video_files'] ?? [];
-                foreach ($files as $file) {
-                    if (($file['quality'] ?? '') === 'sd') {
-                        $url = $file['link'];
+                    if (!empty($results)) {
+                        $activeProvider = $p;
                         break;
                     }
+                } catch (Throwable $e) {
+                    continue;
                 }
-                if (!$url && !empty($files)) {
-                    $url = $files[0]['link'];
-                }
-            } else {
-                $url = $video['url'] ?? '';
             }
 
-            if ($url) {
-                $this->videos[] = $url;
+            if ($randomize && !empty($results)) {
+                shuffle($results);
             }
+
+            $selected = array_slice($results, 0, $videosNeeded);
+
+            foreach ($selected as $video) {
+                $url = '';
+                if ($activeProvider === 'pixabay') {
+                    $url = $video['videos']['tiny']['url'] ?? '';
+                } elseif ($activeProvider === 'pexels') {
+                    $files = $video['video_files'] ?? [];
+                    foreach ($files as $file) {
+                        if (($file['quality'] ?? '') === 'sd') {
+                            $url = $file['link'];
+                            break;
+                        }
+                    }
+                    if (!$url && !empty($files)) {
+                        $url = $files[0]['link'];
+                    }
+                } else {
+                    $url = $video['url'] ?? '';
+                }
+
+                if ($url) {
+                    $this->videos[] = $url;
+                }
+            }
+        }
+
+        if (empty($this->videos)) {
+            throw new VideoAutomatorException("Render failed. The scene brief is too complex for this engine. Please try simplifying it.");
         }
 
         return $this;
