@@ -3,6 +3,7 @@
 namespace PhpVideoAutomator\Engines;
 
 use Exception;
+use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
 use PhpVideoAutomator\Services\InternetArchiveService;
@@ -73,7 +74,7 @@ class ImageToVideoEngine
                 try {
                     $query = $textService->extractStockVideoKeywords($chunk);
                 } catch (\Exception $e) {
-                    // Ignored
+                    Log::warning("AI Keyword Extraction failed for chunk {$index}: " . $e->getMessage());
                 }
             }
 
@@ -146,7 +147,7 @@ class ImageToVideoEngine
                 }
             }
         } catch (Exception $e) {
-            // Ignored
+            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
         }
 
         return null;
