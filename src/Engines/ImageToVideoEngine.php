@@ -10,6 +10,7 @@ use PhpVideoAutomator\Services\InternetArchiveService;
 use PhpVideoAutomator\Services\PexelsService;
 use PhpVideoAutomator\Services\PixabayService;
 use PhpVideoAutomator\Services\WikimediaService;
+use PhpVideoAutomator\Services\AiTextService;
 use Symfony\Component\Process\Process;
 
 class ImageToVideoEngine
@@ -62,7 +63,7 @@ class ImageToVideoEngine
     public function fetchStockImages(string $provider = 'auto', string $apiKey = ''): self
     {
         $aiKey = $this->config['ai_image_api_key'] ?? '';
-        $textService = !empty($aiKey) ? new \PhpVideoAutomator\Services\AiTextService($aiKey) : null;
+        $textService = !empty($aiKey) ? new AiTextService($aiKey) : null;
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
 
@@ -140,7 +141,6 @@ class ImageToVideoEngine
             }
         } catch (Exception $e) {
             Log::warning("Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
-            // Ignore exception and try next provider
         }
 
         return null;
