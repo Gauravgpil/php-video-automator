@@ -338,7 +338,7 @@ class ImageToVideoEngine
         $command = [
             $ffmpegPath, '-y', '-loop', '1', '-i', $imagePath,
             '-vf', $filter,
-            '-c:v', 'libx264', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
             $outputPath
         ];
 
