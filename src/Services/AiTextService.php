@@ -76,4 +76,73 @@ class AiTextService
             return $prompt;
         }
     }
+
+    public function selectBestMediaIndex(string $scene, array $options): int
+    {
+        if (count($options) <= 1) {
+            return 0;
+        }
+
+        if ($this->provider === 'openai') {
+            return $this->selectBestWithOpenAi($scene, $options);
+        }
+
+        return 0;
+    }
+
+    protected function selectBestWithOpenAi(string $scene, array $options): int
+    {
+        if (empty($this->apiKey)) {
+            return 0;
+        }
+
+        $optionsText = "";
+        foreach ($options as $index => $tags) {
+            $optionsText .= "Option {$index}: {$tags}\n";
+        }
+
+        $systemPrompt = "You are a smart stock footage selector. You will be given a 'Scene' and a list of 'Options' (which are tags/keywords of stock media). Your job is to select the single best option that accurately represents the Scene. Return ONLY the integer index of the winning option (e.g., '0' or '2'). Do not output any other text.";
+        $userPrompt = "Scene: \"{$scene}\"\n\nOptions:\n{$optionsText}";
+
+        try {
+            $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => $systemPrompt
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => $userPrompt
+                        ]
+                    ],
+                    'max_tokens' => 10,
+                    'temperature' => 0.1
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+            $content = data_get($data, 'choices.0.message.content');
+            
+            if (!empty($content)) {
+                $content = trim($content);
+                if (preg_match('/^\d+$/', $content, $matches)) {
+                    $idx = (int)$matches[0];
+                    if (isset($options[$idx])) {
+                        return $idx;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            Log::warning('OpenAI AI Selection Error: ' . $e->getMessage());
+        }
+
+        return 0;
+    }
 }

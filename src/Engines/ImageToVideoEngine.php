@@ -85,7 +85,7 @@ class ImageToVideoEngine
             $imageUrl = null;
             
             foreach ($providersToTry as $p) {
-                $imageUrl = $this->searchProviderForImage($p, $query, true);
+                $imageUrl = $this->searchProviderForImage($p, $query, true, $textService, $chunk);
                 if ($imageUrl) {
                     break;
                 }
@@ -94,7 +94,7 @@ class ImageToVideoEngine
             if (!$imageUrl) {
                 $fallbackQuery = "scenery background abstract";
                 foreach ($providersToTry as $p) {
-                    $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false);
+                    $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false, null, '');
                     if ($imageUrl) break;
                 }
             }
@@ -109,7 +109,7 @@ class ImageToVideoEngine
         return $this;
     }
 
-    private function searchProviderForImage(string $provider, string $query, bool $randomize = true): ?string
+    private function searchProviderForImage(string $provider, string $query, bool $randomize = true, ?AiTextService $textService = null, string $scene = ''): ?string
     {
         $key = $this->config["{$provider}_api_key"] ?? '';
         if (empty($key) && in_array($provider, ['pixabay', 'pexels'])) {
@@ -117,32 +117,50 @@ class ImageToVideoEngine
         }
 
         try {
+            $results = [];
             if ($provider === 'pixabay') {
                 $service = new PixabayService($key);
                 $results = $service->searchImages($query, 10);
-                if (!empty($results)) {
-                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
-                    return $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
-                }
             } elseif ($provider === 'pexels') {
                 $service = new PexelsService($key);
                 $results = $service->searchImages($query, 10);
-                if (!empty($results)) {
-                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
-                    return $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
-                }
             } elseif ($provider === 'wikimedia') {
                 $service = new WikimediaService();
                 $results = $service->searchImages($query, 10);
-                if (!empty($results)) {
-                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
-                    return $result['url'] ?? null;
-                }
             } elseif ($provider === 'archive') {
                 $service = new InternetArchiveService();
                 $results = $service->searchImages($query, 10);
-                if (!empty($results)) {
-                    $result = $randomize ? $results[array_rand(array_slice($results, 0, 3))] : $results[0];
+            }
+
+            if (!empty($results)) {
+                $selectedIndex = 0;
+                
+                if ($textService && !empty($scene)) {
+                    $options = [];
+                    foreach (array_slice($results, 0, 10) as $i => $item) {
+                        $desc = '';
+                        if ($provider === 'pixabay') {
+                            $desc = $item['tags'] ?? '';
+                        } elseif ($provider === 'pexels') {
+                            $path = parse_url($item['url'] ?? '', PHP_URL_PATH) ?? '';
+                            $desc = trim(str_replace('-', ' ', preg_replace('/-\d+\/?$/', '', basename($path))));
+                        } elseif ($provider === 'wikimedia' || $provider === 'archive') {
+                            $desc = $item['title'] ?? '';
+                        }
+                        $options[$i] = $desc;
+                    }
+                    $selectedIndex = $textService->selectBestMediaIndex($scene, $options);
+                } elseif ($randomize) {
+                    $selectedIndex = array_rand(array_slice($results, 0, 3));
+                }
+
+                $result = $results[$selectedIndex] ?? $results[0];
+                
+                if ($provider === 'pixabay') {
+                    return $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
+                } elseif ($provider === 'pexels') {
+                    return $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
+                } elseif ($provider === 'wikimedia' || $provider === 'archive') {
                     return $result['url'] ?? null;
                 }
             }

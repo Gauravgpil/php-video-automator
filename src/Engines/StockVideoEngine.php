@@ -131,8 +131,31 @@ class StockVideoEngine
                 }
             }
 
-            if ($randomize && !empty($results)) {
-                shuffle($results);
+            if (!empty($results)) {
+                if ($textService && !empty($chunk)) {
+                    $options = [];
+                    foreach (array_slice($results, 0, 10) as $i => $item) {
+                        $desc = '';
+                        if ($activeProvider === 'pixabay') {
+                            $desc = $item['tags'] ?? '';
+                        } elseif ($activeProvider === 'pexels') {
+                            $path = parse_url($item['url'] ?? '', PHP_URL_PATH) ?? '';
+                            $desc = trim(str_replace('-', ' ', preg_replace('/-\d+\/?$/', '', basename($path))));
+                        } elseif ($activeProvider === 'wikimedia' || $activeProvider === 'archive') {
+                            $desc = $item['title'] ?? '';
+                        }
+                        $options[$i] = $desc;
+                    }
+                    $bestIndex = $textService->selectBestMediaIndex($chunk, $options);
+                    
+                    if (isset($results[$bestIndex])) {
+                        $best = $results[$bestIndex];
+                        unset($results[$bestIndex]);
+                        array_unshift($results, $best);
+                    }
+                } elseif ($randomize) {
+                    shuffle($results);
+                }
             }
 
             $selected = array_slice($results, 0, $videosNeeded);
