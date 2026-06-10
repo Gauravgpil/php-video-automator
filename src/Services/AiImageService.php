@@ -58,15 +58,17 @@ class AiImageService
 
             return $imageUrl;
         } catch (Exception $e) {
-            Log::error('OpenAI Image Gen Error: ' . $e->getMessage());
+            $errorMessage = $e->getMessage();
 
-            if (strpos($e->getMessage(), 'safety system') !== false) {
+            if (strpos($errorMessage, 'safety system') !== false) {
                 throw new VideoAutomatorException("Render failed. Your prompt was rejected by the AI safety system. Please revise your text to remove any sensitive or restricted content.");
             }
 
-            if (strpos($e->getMessage(), 'billing') !== false || strpos($e->getMessage(), 'quota') !== false) {
+            if (strpos($errorMessage, 'billing') !== false || strpos($errorMessage, 'quota') !== false) {
                 throw new VideoAutomatorException("Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.");
             }
+
+            Log::error('OpenAI Image Gen Error: ' . $errorMessage);
 
             if (strpos($e->getMessage(), 'does not exist') !== false || strpos($e->getMessage(), 'model') !== false) {
                 try {
