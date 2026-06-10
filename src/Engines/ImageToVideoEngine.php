@@ -3,7 +3,6 @@
 namespace PhpVideoAutomator\Engines;
 
 use Exception;
-use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
 use PhpVideoAutomator\Services\InternetArchiveService;
@@ -35,11 +34,6 @@ class ImageToVideoEngine
     {
         $this->script = $script;
         $this->chunks = $this->splitIntoChunks($script);
-        
-        Log::info("VideoAutomator: Script split into " . count($this->chunks) . " chunks.");
-        foreach ($this->chunks as $index => $chunk) {
-            Log::debug("VideoAutomator Chunk [{$index}]: '{$chunk}'");
-        }
         
         return $this;
     }
@@ -79,7 +73,7 @@ class ImageToVideoEngine
                 try {
                     $query = $textService->extractStockVideoKeywords($chunk);
                 } catch (\Exception $e) {
-                    Log::warning("AI Keyword Extraction failed for chunk {$index}: " . $e->getMessage());
+                    // Ignored
                 }
             }
 
@@ -87,21 +81,17 @@ class ImageToVideoEngine
                 $query = substr($query, 0, 100);
             }
             
-            Log::info("VideoAutomator Stock Fetch - Chunk [{$index}]: Original text: '{$chunk}' | AI Keywords: '{$query}'");
-            
             $imageUrl = null;
             
             foreach ($providersToTry as $p) {
                 $imageUrl = $this->searchProviderForImage($p, $query, true);
                 if ($imageUrl) {
-                    Log::info("VideoAutomator Image Found: Chunk [{$index}] Provider [{$p}] ImageURL [{$imageUrl}]");
                     break;
                 }
             }
 
             if (!$imageUrl) {
                 $fallbackQuery = "scenery background abstract";
-                Log::info("VideoAutomator Image Not Found: Chunk [{$index}]. Trying fallback query: '{$fallbackQuery}'");
                 foreach ($providersToTry as $p) {
                     $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false);
                     if ($imageUrl) break;
@@ -122,11 +112,8 @@ class ImageToVideoEngine
     {
         $key = $this->config["{$provider}_api_key"] ?? '';
         if (empty($key) && in_array($provider, ['pixabay', 'pexels'])) {
-            Log::debug("VideoAutomator Search Skipped: Provider [{$provider}] requires API key.");
             return null;
         }
-
-        Log::info("VideoAutomator Executing Search: Provider [{$provider}] | Query [{$query}]");
 
         try {
             if ($provider === 'pixabay') {
@@ -159,10 +146,9 @@ class ImageToVideoEngine
                 }
             }
         } catch (Exception $e) {
-            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
+            // Ignored
         }
 
-        Log::info("VideoAutomator No Results from: Provider [{$provider}] for Query [{$query}]");
         return null;
     }
 
