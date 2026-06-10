@@ -132,7 +132,8 @@ class AiTextService
             
             if (!empty($content)) {
                 $content = trim($content);
-                if (preg_match('/^\d+$/', $content, $matches)) {
+                // Extract the first number from the output in case AI adds extra text
+                if (preg_match('/\d+/', $content, $matches)) {
                     $idx = (int)$matches[0];
                     if (isset($options[$idx])) {
                         return $idx;
