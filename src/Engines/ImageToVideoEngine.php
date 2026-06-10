@@ -59,15 +59,21 @@ class ImageToVideoEngine
         return $this;
     }
 
-    public function fetchStockImages(string $provider = 'auto'): self
+    public function fetchStockImages(string $provider = 'auto', string $apiKey = ''): self
     {
+        $aiKey = $this->config['ai_image_api_key'] ?? '';
+        $textService = !empty($aiKey) ? new \PhpVideoAutomator\Services\AiTextService($aiKey) : null;
+
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
 
         foreach ($this->chunks as $index => $chunk) {
             $query = trim($chunk);
-            if (strlen($query) > 50) {
-                $queryWords = array_slice(explode(' ', $query), 0, 5);
-                $query = implode(' ', $queryWords);
+            if ($textService) {
+                $query = $textService->extractStockVideoKeywords($chunk);
+            }
+
+            if (strlen($query) > 100) {
+                $query = substr($query, 0, 100);
             }
             
             $imageUrl = null;
