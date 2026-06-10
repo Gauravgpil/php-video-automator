@@ -58,19 +58,19 @@ class AiImageService
 
             return $imageUrl;
         } catch (Exception $e) {
-            $errorMessage = $e->getMessage();
+            $error = $e->getMessage();
 
-            if (strpos($errorMessage, 'safety system') !== false) {
+            if (strpos($error, 'safety system') !== false) {
                 throw new VideoAutomatorException("Render failed. Your prompt was rejected by the AI safety system. Please revise your text to remove any sensitive or restricted content.");
             }
 
-            if (strpos($errorMessage, 'billing') !== false || strpos($errorMessage, 'quota') !== false) {
+            if (strpos($error, 'billing') !== false || strpos($error, 'quota') !== false) {
                 throw new VideoAutomatorException("Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.");
             }
 
-            Log::error('OpenAI Image Gen Error: ' . $errorMessage);
+            Log::error('OpenAI Image Gen Error: ' . $error);
 
-            if (strpos($e->getMessage(), 'does not exist') !== false || strpos($e->getMessage(), 'model') !== false) {
+            if (strpos($error, 'does not exist') !== false || strpos($error, 'model') !== false) {
                 try {
                     $response = $this->client->post('https://api.openai.com/v1/images/generations', [
                         'headers' => [
