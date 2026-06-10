@@ -42,7 +42,7 @@ class AiImageService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'dall-e-3',
+                    'model' => 'gpt-image-2',
                     'prompt' => $prompt,
                     'n' => 1,
                     'size' => $size
@@ -76,7 +76,7 @@ class AiImageService
                             'Content-Type' => 'application/json',
                         ],
                         'json' => [
-                            'model' => 'dall-e-2',
+                            'model' => 'gpt-image-2',
                             'prompt' => $prompt,
                             'n' => 1,
                             'size' => $size
