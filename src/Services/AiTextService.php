@@ -146,4 +146,48 @@ class AiTextService
 
         return 0;
     }
+
+    public function smartFormatScript(string $script, int $targetCount = 3): string
+    {
+        if (empty($this->apiKey) || $this->provider !== 'openai') {
+            return $script;
+        }
+
+        try {
+            $systemPrompt = "You are a professional video director. The user will provide a long, unpunctuated or comma-heavy video prompt. Your task is to rewrite it into EXACTLY {$targetCount} distinct, highly visual sentences separated by periods. Focus on breaking the visual elements logically into scenes. Do not add conversational filler. Output ONLY the rewritten sentences.";
+            
+            $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => $systemPrompt
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => $script
+                        ]
+                    ],
+                    'max_tokens' => 150,
+                    'temperature' => 0.3
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+            $content = data_get($data, 'choices.0.message.content');
+            
+            if (!empty($content)) {
+                return trim($content);
+            }
+        } catch (Exception $e) {
+            Log::warning('OpenAI AI Formatting Error: ' . $e->getMessage());
+        }
+
+        return $script;
+    }
 }
