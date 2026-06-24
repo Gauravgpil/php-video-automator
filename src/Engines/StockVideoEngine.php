@@ -197,13 +197,23 @@ class StockVideoEngine
             foreach ($selected as $video) {
                 $url = '';
                 if ($activeProvider === 'pixabay') {
-                    $url = $video['videos']['tiny']['url'] ?? '';
+                    $url = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? ($video['videos']['small']['url'] ?? ($video['videos']['tiny']['url'] ?? '')));
                 } elseif ($activeProvider === 'pexels') {
                     $files = $video['video_files'] ?? [];
+                    // Prefer HD or UHD
                     foreach ($files as $file) {
-                        if (($file['quality'] ?? '') === 'sd') {
+                        if (($file['quality'] ?? '') === 'hd' || ($file['quality'] ?? '') === 'uhd') {
                             $url = $file['link'];
                             break;
+                        }
+                    }
+                    // Fallback
+                    if (!$url) {
+                        foreach ($files as $file) {
+                            if (($file['quality'] ?? '') === 'sd') {
+                                $url = $file['link'];
+                                break;
+                            }
                         }
                     }
                     if (!$url && !empty($files)) {
