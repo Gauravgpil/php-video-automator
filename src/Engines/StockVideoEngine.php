@@ -20,6 +20,7 @@ class StockVideoEngine
     protected int $width = 1080;
     protected int $height = 1920;
     protected int $maxClipDuration = 5;
+    protected bool $addCaptions = false;
 
     public function __construct(array $config)
     {
@@ -56,6 +57,12 @@ class StockVideoEngine
     public function withAudio(string $audioPath): self
     {
         $this->audioPath = $audioPath;
+        return $this;
+    }
+
+    public function withCaptions(bool $enable = true): self
+    {
+        $this->addCaptions = $enable;
         return $this;
     }
 
@@ -235,7 +242,8 @@ class StockVideoEngine
                 }
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
-                $this->standardizeClip($rawPath, $clipPath);
+                $text = $this->addCaptions ? ($this->chunks[$index] ?? '') : '';
+                $this->standardizeClip($rawPath, $clipPath, $text);
                 
                 $clips[] = $clipPath;
             }
@@ -283,11 +291,24 @@ class StockVideoEngine
         }
     }
 
-    protected function standardizeClip(string $inputPath, string $outputPath): void
+    protected function standardizeClip(string $inputPath, string $outputPath, string $text = ''): void
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
         
         $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps=25";
+        
+        if ($text !== '') {
+            $text = wordwrap($text, 35, "\n");
+            $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
+            file_put_contents($txtPath, $text);
+            $fontPath = $this->config['font_path'] ?? '';
+            
+            $safeTxtPath = str_replace(['\\', ':'], ['/', '\\:'], $txtPath);
+            $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
+            
+            $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
+            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=42:box=1:boxcolor=black@0.7:boxborderw=20:x=(w-text_w)/2:y=h-text_h-100:line_spacing=10";
+        }
         
         $command = [
             $ffmpegPath, '-y', 
