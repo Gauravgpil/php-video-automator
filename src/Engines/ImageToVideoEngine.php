@@ -74,6 +74,7 @@ class ImageToVideoEngine
         $textService = !empty($aiKey) ? new AiTextService($aiKey) : null;
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
+        $usedUrls = [];
 
         foreach ($this->chunks as $index => $chunk) {
             $query = trim($chunk);
@@ -92,7 +93,7 @@ class ImageToVideoEngine
             $imageUrl = null;
             
             foreach ($providersToTry as $p) {
-                $imageUrl = $this->searchProviderForImage($p, $query, true, $textService, $chunk);
+                $imageUrl = $this->searchProviderForImage($p, $query, true, $textService, $chunk, $usedUrls);
                 if ($imageUrl) {
                     break;
                 }
@@ -101,7 +102,7 @@ class ImageToVideoEngine
             if (!$imageUrl) {
                 $fallbackQuery = "scenery background abstract";
                 foreach ($providersToTry as $p) {
-                    $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false, null, '');
+                    $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false, null, '', $usedUrls);
                     if ($imageUrl) break;
                 }
             }
@@ -111,12 +112,13 @@ class ImageToVideoEngine
             }
 
             $this->images[$index] = $imageUrl;
+            $usedUrls[] = $imageUrl;
         }
 
         return $this;
     }
 
-    private function searchProviderForImage(string $provider, string $query, bool $randomize = true, ?AiTextService $textService = null, string $scene = ''): ?string
+    private function searchProviderForImage(string $provider, string $query, bool $randomize = true, ?AiTextService $textService = null, string $scene = '', array &$usedUrls = []): ?string
     {
         $key = $this->config["{$provider}_api_key"] ?? '';
         if (empty($key) && in_array($provider, ['pixabay', 'pexels'])) {
@@ -140,8 +142,29 @@ class ImageToVideoEngine
             }
 
             if (!empty($results)) {
-                $selectedIndex = 0;
+                $validItems = [];
+                foreach ($results as $item) {
+                    $url = null;
+                    if ($provider === 'pixabay') {
+                        $url = $item['largeImageURL'] ?? ($item['webformatURL'] ?? null);
+                    } elseif ($provider === 'pexels') {
+                        $url = $item['src']['large2x'] ?? ($item['src']['large'] ?? null);
+                    } elseif ($provider === 'wikimedia' || $provider === 'archive') {
+                        $url = $item['url'] ?? null;
+                    }
+                    if ($url && !in_array($url, $usedUrls)) {
+                        $item['_final_url'] = $url;
+                        $validItems[] = $item;
+                    }
+                }
                 
+                if (empty($validItems)) {
+                    return null;
+                }
+                
+                $results = $validItems;
+
+                $selectedIndex = 0;
                 if ($textService && !empty($scene)) {
                     $options = [];
                     foreach (array_slice($results, 0, 10) as $i => $item) {
@@ -156,20 +179,17 @@ class ImageToVideoEngine
                         }
                         $options[$i] = $desc;
                     }
-                    $selectedIndex = $textService->selectBestMediaIndex($scene, $options);
+                    try {
+                        $selectedIndex = $textService->selectBestMediaIndex($scene, $options);
+                    } catch (\Exception $e) {
+                        $selectedIndex = 0;
+                    }
                 } elseif ($randomize) {
-                    $selectedIndex = array_rand(array_slice($results, 0, 3));
+                    $selectedIndex = array_rand(array_slice($results, 0, min(3, count($results))));
                 }
 
                 $result = $results[$selectedIndex] ?? $results[0];
-                
-                if ($provider === 'pixabay') {
-                    return $result['largeImageURL'] ?? ($result['webformatURL'] ?? null);
-                } elseif ($provider === 'pexels') {
-                    return $result['src']['large2x'] ?? ($result['src']['large'] ?? null);
-                } elseif ($provider === 'wikimedia' || $provider === 'archive') {
-                    return $result['url'] ?? null;
-                }
+                return $result['_final_url'] ?? null;
             }
         } catch (Exception $e) {
             Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
@@ -346,8 +366,9 @@ class ImageToVideoEngine
 
         $command = [
             $ffmpegPath, '-y', '-loop', '1', '-i', $imagePath,
+            '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
             $outputPath
         ];
 
