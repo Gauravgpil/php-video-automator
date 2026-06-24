@@ -19,7 +19,6 @@ class StockVideoEngine
     protected ?string $audioPath = null;
     protected int $width = 1080;
     protected int $height = 1920;
-    protected int $height = 1920;
     protected float $maxClipDuration = 5.0;
     protected bool $addCaptions = false;
 
