@@ -324,6 +324,7 @@ class ImageToVideoEngine
         }
 
         if ($text !== '') {
+            $text = wordwrap($text, 35, "\n");
             $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
             file_put_contents($txtPath, $text);
             $fontPath = $this->config['font_path'] ?? '';
@@ -332,7 +333,7 @@ class ImageToVideoEngine
             $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
             
             $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
-            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=10:x=(w-text_w)/2:y=(h-text_h)-150";
+            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=42:box=1:boxcolor=black@0.7:boxborderw=20:x=(w-text_w)/2:y=h-text_h-100:line_spacing=10";
         }
 
         $command = [
