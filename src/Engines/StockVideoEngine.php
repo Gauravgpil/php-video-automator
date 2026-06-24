@@ -185,7 +185,14 @@ class StockVideoEngine
                 }
             }
 
-            $selected = array_slice($results, 0, $videosNeeded);
+            $selected = [];
+            if (!empty($results)) {
+                $j = 0;
+                while (count($selected) < $videosNeeded) {
+                    $selected[] = $results[$j % count($results)];
+                    $j++;
+                }
+            }
 
             foreach ($selected as $video) {
                 $url = '';
