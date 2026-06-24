@@ -28,11 +28,18 @@ class StockVideoEngine
     }
 
     protected array $chunks = [];
+    protected array $captionChunks = [];
 
     public function setScript(string $script): self
     {
         $this->script = $script;
         $this->chunks = $this->splitIntoChunks($script);
+        return $this;
+    }
+
+    public function setCaptions(string $captions): self
+    {
+        $this->captionChunks = $this->splitIntoChunks($captions);
         return $this;
     }
 
@@ -242,7 +249,8 @@ class StockVideoEngine
                 }
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
-                $text = $this->addCaptions ? ($this->chunks[$index] ?? '') : '';
+                $captionText = !empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
+                $text = $this->addCaptions ? $captionText : '';
                 $this->standardizeClip($rawPath, $clipPath, $text);
                 
                 $clips[] = $clipPath;

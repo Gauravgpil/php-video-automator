@@ -18,6 +18,7 @@ class ImageToVideoEngine
     protected array $config;
     protected string $script = '';
     protected array $chunks = [];
+    protected array $captionChunks = [];
     protected array $images = [];
     protected bool $addCaptions = false;
     protected string $animation = 'none';
@@ -36,6 +37,12 @@ class ImageToVideoEngine
         $this->script = $script;
         $this->chunks = $this->splitIntoChunks($script);
         
+        return $this;
+    }
+
+    public function setCaptions(string $captions): self
+    {
+        $this->captionChunks = $this->splitIntoChunks($captions);
         return $this;
     }
 
@@ -228,7 +235,8 @@ class ImageToVideoEngine
                 }
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
-                $text = $this->addCaptions ? $this->chunks[$index] : '';
+                $captionText = !empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
+                $text = $this->addCaptions ? $captionText : '';
                 $this->createClipFromImage($imagePath, $clipPath, $text);
                 
                 $clips[] = $clipPath;
