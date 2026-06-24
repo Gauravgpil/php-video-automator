@@ -267,7 +267,7 @@ class ImageToVideoEngine
 
             if ($this->audioPath && file_exists($this->audioPath)) {
                 $audioCmd = [
-                    $ffmpegPath, '-y', '-i', $rawOutput, '-i', $this->audioPath,
+                    $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
                     '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest',
                     $outputPath
                 ];
