@@ -306,7 +306,7 @@ class StockVideoEngine
         $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps=25";
         
         if ($text !== '') {
-            $text = wordwrap($text, 35, "\n");
+            $text = wordwrap($text, 45, "\n");
             $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
             file_put_contents($txtPath, $text);
             $fontPath = $this->config['font_path'] ?? '';
@@ -315,7 +315,7 @@ class StockVideoEngine
             $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
             
             $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
-            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=42:box=1:boxcolor=black@0.7:boxborderw=20:x=(w-text_w)/2:y=h-text_h-100:line_spacing=10";
+            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=36:box=1:boxcolor=black@0.65:boxborderw=24:x=(w-text_w)/2:y=h-text_h-180:line_spacing=12";
         }
         
         $command = [
