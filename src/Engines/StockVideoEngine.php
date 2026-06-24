@@ -19,7 +19,8 @@ class StockVideoEngine
     protected ?string $audioPath = null;
     protected int $width = 1080;
     protected int $height = 1920;
-    protected int $maxClipDuration = 5;
+    protected int $height = 1920;
+    protected float $maxClipDuration = 5.0;
     protected bool $addCaptions = false;
 
     public function __construct(array $config)
@@ -80,7 +81,7 @@ class StockVideoEngine
         return $this;
     }
 
-    public function setMaxClipDuration(int $seconds): self
+    public function setMaxClipDuration(float $seconds): self
     {
         $this->maxClipDuration = $seconds;
         return $this;
@@ -320,11 +321,11 @@ class StockVideoEngine
         
         $command = [
             $ffmpegPath, '-y', 
+            '-stream_loop', '-1',
             '-i', $inputPath,
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
             '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$this->maxClipDuration, '-pix_fmt', 'yuv420p',
-            '-shortest',
             $outputPath
         ];
 

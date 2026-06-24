@@ -203,7 +203,7 @@ class ImageToVideoEngine
         return $this;
     }
 
-    public function setImageDuration(int $seconds): self
+    public function setImageDuration(float $seconds): self
     {
         $this->imageDuration = $seconds;
         return $this;
