@@ -111,6 +111,7 @@ class StockVideoEngine
         }
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
+        $usedUrls = [];
 
         foreach ($chunksToProcess as $index => $chunk) {
             $videosNeeded = $videosPerChunk[$index] ?? 0;
@@ -118,7 +119,9 @@ class StockVideoEngine
 
             $query = $chunk;
             if ($textService) {
-                $query = $textService->extractStockVideoKeywords($chunk);
+                try {
+                    $query = $textService->extractStockVideoKeywords($chunk);
+                } catch (Throwable $e) {}
             }
 
             if (strlen($query) > 100) {
@@ -157,10 +160,11 @@ class StockVideoEngine
                 }
             }
 
+            $validUrls = [];
             if (!empty($results)) {
                 if ($textService && !empty($chunk)) {
-                    $options = [];
-                    foreach (array_slice($results, 0, 10) as $i => $item) {
+                    $optionsDesc = [];
+                    foreach (array_slice($results, 0, 10) as $idx => $item) {
                         $desc = '';
                         if ($activeProvider === 'pixabay') {
                             $desc = $item['tags'] ?? '';
@@ -170,60 +174,67 @@ class StockVideoEngine
                         } elseif ($activeProvider === 'wikimedia' || $activeProvider === 'archive') {
                             $desc = $item['title'] ?? '';
                         }
-                        $options[$i] = $desc;
+                        $optionsDesc[$idx] = $desc;
                     }
-                    $bestIndex = $textService->selectBestMediaIndex($chunk, $options);
-                    
-                    if (isset($results[$bestIndex])) {
-                        $best = $results[$bestIndex];
-                        unset($results[$bestIndex]);
-                        array_unshift($results, $best);
-                    }
+                    try {
+                        $bestIndex = $textService->selectBestMediaIndex($chunk, $optionsDesc);
+                        if (isset($results[$bestIndex])) {
+                            $best = $results[$bestIndex];
+                            unset($results[$bestIndex]);
+                            array_unshift($results, $best);
+                        }
+                    } catch (Throwable $e) {}
                 } elseif ($randomize) {
                     shuffle($results);
                 }
-            }
 
-            $selected = [];
-            if (!empty($results)) {
-                $j = 0;
-                while (count($selected) < $videosNeeded) {
-                    $selected[] = $results[$j % count($results)];
-                    $j++;
-                }
-            }
-
-            foreach ($selected as $video) {
-                $url = '';
-                if ($activeProvider === 'pixabay') {
-                    $url = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? ($video['videos']['small']['url'] ?? ($video['videos']['tiny']['url'] ?? '')));
-                } elseif ($activeProvider === 'pexels') {
-                    $files = $video['video_files'] ?? [];
-                    // Prefer HD or UHD
-                    foreach ($files as $file) {
-                        if (($file['quality'] ?? '') === 'hd' || ($file['quality'] ?? '') === 'uhd') {
-                            $url = $file['link'];
-                            break;
-                        }
-                    }
-                    // Fallback
-                    if (!$url) {
+                foreach ($results as $video) {
+                    $url = '';
+                    if ($activeProvider === 'pixabay') {
+                        $url = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? ($video['videos']['small']['url'] ?? ($video['videos']['tiny']['url'] ?? '')));
+                    } elseif ($activeProvider === 'pexels') {
+                        $files = $video['video_files'] ?? [];
                         foreach ($files as $file) {
-                            if (($file['quality'] ?? '') === 'sd') {
+                            if (($file['quality'] ?? '') === 'hd' || ($file['quality'] ?? '') === 'uhd') {
                                 $url = $file['link'];
                                 break;
                             }
                         }
+                        if (!$url) {
+                            foreach ($files as $file) {
+                                if (($file['quality'] ?? '') === 'sd') {
+                                    $url = $file['link'];
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$url && !empty($files)) {
+                            $url = $files[0]['link'];
+                        }
+                    } else {
+                        $url = $video['url'] ?? '';
                     }
-                    if (!$url && !empty($files)) {
-                        $url = $files[0]['link'];
-                    }
-                } else {
-                    $url = $video['url'] ?? '';
-                }
 
-                if ($url) {
-                    $this->videos[] = $url;
+                    if ($url) {
+                        $validUrls[] = $url;
+                    }
+                }
+            }
+
+            $uniqueValidUrls = array_diff($validUrls, $usedUrls);
+            if (empty($uniqueValidUrls) && !empty($validUrls)) {
+                $uniqueValidUrls = $validUrls;
+            }
+            $uniqueValidUrls = array_values($uniqueValidUrls);
+
+            if (!empty($uniqueValidUrls)) {
+                $j = 0;
+                while ($videosNeeded > 0) {
+                    $selectedUrl = $uniqueValidUrls[$j % count($uniqueValidUrls)];
+                    $this->videos[] = $selectedUrl;
+                    $usedUrls[] = $selectedUrl;
+                    $j++;
+                    $videosNeeded--;
                 }
             }
         }
