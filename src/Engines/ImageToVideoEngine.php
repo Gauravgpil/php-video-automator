@@ -341,7 +341,7 @@ class ImageToVideoEngine
             $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
             
             $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
-            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=36:box=1:boxcolor=black@0.65:boxborderw=24:x=(w-text_w)/2:y=h-text_h-180:line_spacing=12";
+            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=36:box=1:boxcolor=black@0.45:boxborderw=24:x=(w-text_w)/2:y=h-text_h-180:line_spacing=12";
         }
 
         $command = [
