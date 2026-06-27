@@ -191,14 +191,18 @@ class AiTextService
         return $script;
     }
 
-    public function generateVoiceoverScript(string $prompt): string
+    public function generateVoiceoverScript(string $prompt, int $duration = 30): string
     {
         if (empty($this->apiKey) || $this->provider !== 'openai') {
             return $prompt;
         }
 
         try {
-            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write a short, engaging voiceover script for this video. The script should be split into distinct sentences separated by periods. Do not include any visual directions, just the spoken text.";
+            // Estimate a comfortable speaking rate of about ~130 words per minute (approx 2 words per second).
+            $wordCount = (int)($duration * 2.2);
+            $sentenceCount = max(2, (int)($duration / 6)); // roughly a sentence every 6 seconds.
+            
+            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging voiceover script for this video. The video is exactly {$duration} seconds long. Therefore, write a script of roughly {$wordCount} words, split into exactly {$sentenceCount} distinct sentences separated by periods. Do not include any visual directions, just the spoken text.";
             
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
@@ -217,7 +221,7 @@ class AiTextService
                             'content' => $prompt
                         ]
                     ],
-                    'max_tokens' => 200,
+                    'max_tokens' => max(150, (int)($wordCount * 1.5)),
                     'temperature' => 0.7
                 ]
             ]);

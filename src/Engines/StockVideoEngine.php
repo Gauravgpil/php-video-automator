@@ -112,6 +112,20 @@ class StockVideoEngine
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
         $usedUrls = [];
+        
+        $fallbackPool = [];
+        try {
+            $key = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
+            if (!empty($key)) {
+                $service = new PixabayService($key);
+                $res = $service->searchVideos('background abstract nature', 100);
+                foreach ($res as $video) {
+                    $u = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? '');
+                    if ($u) $fallbackPool[] = $u;
+                }
+                shuffle($fallbackPool);
+            }
+        } catch (Throwable $e) {}
 
         foreach ($chunksToProcess as $index => $chunk) {
             $videosNeeded = $videosPerChunk[$index] ?? 0;
@@ -222,20 +236,27 @@ class StockVideoEngine
             }
 
             $uniqueValidUrls = array_diff($validUrls, $usedUrls);
-            if (empty($uniqueValidUrls) && !empty($validUrls)) {
-                $uniqueValidUrls = $validUrls;
-            }
             $uniqueValidUrls = array_values($uniqueValidUrls);
 
-            if (!empty($uniqueValidUrls)) {
-                $j = 0;
-                while ($videosNeeded > 0) {
-                    $selectedUrl = $uniqueValidUrls[$j % count($uniqueValidUrls)];
-                    $this->videos[] = $selectedUrl;
-                    $usedUrls[] = $selectedUrl;
-                    $j++;
-                    $videosNeeded--;
+            $j = 0;
+            while ($videosNeeded > 0) {
+                if (isset($uniqueValidUrls[$j])) {
+                    $selectedUrl = $uniqueValidUrls[$j];
+                } else {
+                    $selectedUrl = array_shift($fallbackPool);
+                    while ($selectedUrl && in_array($selectedUrl, $usedUrls)) {
+                        $selectedUrl = array_shift($fallbackPool);
+                    }
+                    if (!$selectedUrl) {
+                        $selectedUrl = $validUrls[$j % max(1, count($validUrls))];
+                    }
                 }
+                
+                $this->videos[] = $selectedUrl;
+                $usedUrls[] = $selectedUrl;
+                
+                $j++;
+                $videosNeeded--;
             }
         }
 
