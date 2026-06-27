@@ -138,11 +138,11 @@ class StockVideoEngine
                     if ($p === 'pixabay') {
                         if (empty($key)) continue;
                         $service = new PixabayService($key);
-                        $results = $service->searchVideos($query, 15);
+                        $results = $service->searchVideos($query, 40);
                     } elseif ($p === 'pexels') {
                         if (empty($key)) continue;
                         $service = new PexelsService($key);
-                        $results = $service->searchVideos($query, 15);
+                        $results = $service->searchVideos($query, 40);
                     } elseif ($p === 'wikimedia') {
                         $service = new WikimediaService();
                         $results = $service->searchVideos($query, 15);
@@ -308,9 +308,10 @@ class StockVideoEngine
             }
 
             if ($this->audioPath && file_exists($this->audioPath)) {
+                $durationStr = (string)(count($this->videos) * $this->maxClipDuration);
                 $audioCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
-                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest',
+                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-t', $durationStr,
                     $outputPath
                 ];
                 $audioProc = new Process($audioCmd);
@@ -352,6 +353,7 @@ class StockVideoEngine
             '-i', $inputPath,
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
+            '-map', '0:v:0', '-map', '1:a:0',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$this->maxClipDuration, '-pix_fmt', 'yuv420p',
             $outputPath
         ];

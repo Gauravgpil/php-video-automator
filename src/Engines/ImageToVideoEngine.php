@@ -286,9 +286,10 @@ class ImageToVideoEngine
             }
 
             if ($this->audioPath && file_exists($this->audioPath)) {
+                $durationStr = (string)(count($this->images) * $this->imageDuration);
                 $audioCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
-                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest',
+                    '-c:v', 'copy', '-c:a', 'aac', '-map', '0:v:0', '-map', '1:a:0', '-shortest', '-t', $durationStr,
                     $outputPath
                 ];
                 $audioProc = new Process($audioCmd);
@@ -368,6 +369,7 @@ class ImageToVideoEngine
             $ffmpegPath, '-y', '-loop', '1', '-i', $imagePath,
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
+            '-map', '0:v:0', '-map', '1:a:0',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
             $outputPath
         ];

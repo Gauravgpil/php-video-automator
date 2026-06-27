@@ -190,4 +190,48 @@ class AiTextService
 
         return $script;
     }
+
+    public function generateVoiceoverScript(string $prompt): string
+    {
+        if (empty($this->apiKey) || $this->provider !== 'openai') {
+            return $prompt;
+        }
+
+        try {
+            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write a short, engaging voiceover script for this video. The script should be split into distinct sentences separated by periods. Do not include any visual directions, just the spoken text.";
+            
+            $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => $systemPrompt
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => $prompt
+                        ]
+                    ],
+                    'max_tokens' => 200,
+                    'temperature' => 0.7
+                ]
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+            $content = data_get($data, 'choices.0.message.content');
+            
+            if (!empty($content)) {
+                return trim($content);
+            }
+        } catch (Exception $e) {
+            Log::warning('OpenAI AI Voiceover Script Error: ' . $e->getMessage());
+        }
+
+        return $prompt;
+    }
 }
