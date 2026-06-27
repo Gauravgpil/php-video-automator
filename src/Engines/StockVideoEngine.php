@@ -115,14 +115,32 @@ class StockVideoEngine
         
         $fallbackPool = [];
         try {
-            $key = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
-            if (!empty($key)) {
-                $service = new PixabayService($key);
+            $pixKey = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
+            if (!empty($pixKey)) {
+                $service = new PixabayService($pixKey);
                 $res = $service->searchVideos('background abstract nature', 100);
                 foreach ($res as $video) {
                     $u = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? '');
                     if ($u) $fallbackPool[] = $u;
                 }
+            }
+            if (empty($fallbackPool)) {
+                $pexKey = $apiKey ?: ($this->config['pexels_api_key'] ?? '');
+                if (!empty($pexKey)) {
+                    $service = new PexelsService($pexKey);
+                    $res = $service->searchVideos('background abstract nature', 80);
+                    foreach ($res as $video) {
+                        $files = $video['video_files'] ?? [];
+                        foreach ($files as $f) {
+                            if (($f['quality'] ?? '') === 'hd' || ($f['quality'] ?? '') === 'sd') {
+                                $fallbackPool[] = $f['link'];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!empty($fallbackPool)) {
                 shuffle($fallbackPool);
             }
         } catch (Throwable $e) {}
