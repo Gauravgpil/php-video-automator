@@ -289,8 +289,7 @@ class ImageToVideoEngine
                 $durationStr = (string)(count($this->images) * $this->imageDuration);
                 $audioCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
-                    '-filter_complex', '[0:a]volume=2.0[v0];[1:a]volume=1.6[v1];[v0][v1]amix=inputs=2:duration=first:dropout_transition=0[a]',
-                    '-map', '0:v:0', '-map', '[a]',
+                    '-map', '0:v:0', '-map', '1:a:0',
                     '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-t', $durationStr,
                     $outputPath
                 ];
