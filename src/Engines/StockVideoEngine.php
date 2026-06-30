@@ -10,9 +10,12 @@ use PhpVideoAutomator\Services\InternetArchiveService;
 use PhpVideoAutomator\Services\AiTextService;
 use Symfony\Component\Process\Process;
 use Throwable;
+use PhpVideoAutomator\Traits\HandlesCaptions;
 
 class StockVideoEngine
 {
+    use HandlesCaptions;
+
     protected array $config;
     protected string $script = '';
     protected array $videos = [];
@@ -20,7 +23,6 @@ class StockVideoEngine
     protected int $width = 1080;
     protected int $height = 1920;
     protected float $maxClipDuration = 5.0;
-    protected bool $addCaptions = false;
 
     public function __construct(array $config)
     {
@@ -64,12 +66,6 @@ class StockVideoEngine
     public function withAudio(string $audioPath): self
     {
         $this->audioPath = $audioPath;
-        return $this;
-    }
-
-    public function withCaptions(bool $enable = true): self
-    {
-        $this->addCaptions = $enable;
         return $this;
     }
 
@@ -381,10 +377,8 @@ class StockVideoEngine
             $fontPath = $this->config['font_path'] ?? '';
             
             $safeTxtPath = str_replace(['\\', ':'], ['/', '\\:'], $txtPath);
-            $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
             
-            $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
-            $filter .= ",drawtext=textfile='{$safeTxtPath}':{$fontStr}fontcolor=white:fontsize=36:box=1:boxcolor=black@0.45:boxborderw=24:x=(w-text_w)/2:y=h-text_h-180:line_spacing=12";
+            $filter .= ',' . $this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
         }
         
         $command = [
