@@ -371,7 +371,8 @@ class StockVideoEngine
         $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps=25";
         
         if ($text !== '') {
-            $text = wordwrap($text, 45, "\n");
+            $limit = $this->getCaptionWordwrapLimit($this->width);
+            $text = wordwrap($text, $limit, "\n");
             $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
             file_put_contents($txtPath, $text);
             $fontPath = $this->config['font_path'] ?? '';

@@ -14,6 +14,26 @@ trait HandlesCaptions
         return $this;
     }
 
+    protected function getCaptionWordwrapLimit(int $width): int
+    {
+        $preset = $this->captionStyleOptions['preset'] ?? 'classic';
+        
+        $presets = [
+            'classic' => 36,
+            'modern_middle' => 54,
+            'elegant_bottom' => 45,
+            'bold_top' => 60,
+            'cinematic' => 40
+        ];
+        
+        $fontsize = $this->captionStyleOptions['fontsize'] ?? ($presets[$preset] ?? 36);
+        $fontsize = (int)$fontsize > 0 ? (int)$fontsize : 36;
+        
+        $limit = floor(($width * 0.9) / ($fontsize * 0.55));
+        
+        return max(15, (int)$limit);
+    }
+
     protected function getCaptionFilter(string $safeTxtPath, int $width, int $height): string
     {
         $preset = $this->captionStyleOptions['preset'] ?? 'classic';
