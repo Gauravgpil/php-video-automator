@@ -92,10 +92,6 @@ trait HandlesCaptions
         $presetStyle = $presets[$preset] ?? $baseStyle;
         $style = array_merge($baseStyle, $presetStyle, $this->captionStyleOptions);
 
-        $fontPath = $style['font_path'] ?? ($this->config['font_path'] ?? '');
-        $safeFontPath = str_replace(['\\', ':'], ['/', '\\:'], $fontPath);
-        $fontStr = $safeFontPath ? "fontfile='{$safeFontPath}':" : "";
-        
         $fontcolor = $style['fontcolor'] ?? 'white';
         $fontsize = $style['fontsize'] ?? 36;
         $box = $style['box'] ?? 1;
@@ -110,7 +106,6 @@ trait HandlesCaptions
 
         $filterParams = [
             "textfile='{$safeTxtPath}'",
-            $fontStr ? rtrim($fontStr, ':') : null,
             "fontcolor={$fontcolor}",
             "fontsize={$fontsize}",
             "x={$x}",
