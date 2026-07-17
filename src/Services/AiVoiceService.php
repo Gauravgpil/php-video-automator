@@ -75,7 +75,7 @@ class AiVoiceService
             ],
             'json' => [
                 'text' => $text,
-                'voice' => $model ?: 'aura-asteria-en',
+                'voice' => $model ?: 'lily',
                 'format' => 'mp3',
                 'return_durations' => true,
             ]
