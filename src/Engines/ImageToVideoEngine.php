@@ -11,6 +11,8 @@ use PhpVideoAutomator\Services\PexelsService;
 use PhpVideoAutomator\Services\PixabayService;
 use PhpVideoAutomator\Services\WikimediaService;
 use PhpVideoAutomator\Services\AiTextService;
+use PhpVideoAutomator\Services\AiVoiceService;
+use PhpVideoAutomator\Services\AssSubtitleService;
 use Symfony\Component\Process\Process;
 use PhpVideoAutomator\Traits\HandlesCaptions;
 
@@ -252,7 +254,7 @@ class ImageToVideoEngine
 
                 $clipPath = $tempDir . "/clip_{$index}.mp4";
                 $captionText = !empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
-                $text = $this->addCaptions ? $captionText : '';
+                $text = ($this->addCaptions && empty($this->voiceOptions)) ? $captionText : '';
                 $this->createClipFromImage($imagePath, $clipPath, $text);
                 
                 $clips[] = $clipPath;
@@ -266,7 +268,7 @@ class ImageToVideoEngine
             file_put_contents($listPath, $listContent);
 
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $rawOutput = $this->audioPath ? $tempDir . '/raw_output.mp4' : $outputPath;
+            $rawOutput = ($this->audioPath || !empty($this->voiceOptions)) ? $tempDir . '/raw_output.mp4' : $outputPath;
             
             $command = [
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
@@ -281,8 +283,60 @@ class ImageToVideoEngine
                 throw new VideoAutomatorException("FFMPEG Concat Error: " . $process->getErrorOutput());
             }
 
-            if ($this->audioPath && file_exists($this->audioPath)) {
-                $durationStr = (string)(count($this->images) * $this->imageDuration);
+            $durationStr = (string)(count($this->images) * $this->imageDuration);
+
+            if (!empty($this->voiceOptions)) {
+                $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
+                $voiceService = new AiVoiceService();
+                $ttsAudioPath = $tempDir . '/tts.mp3';
+                
+                $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
+                    $captionsText, 
+                    $this->voiceOptions['provider'], 
+                    $this->voiceOptions['model'], 
+                    $this->voiceOptions['apiKey'], 
+                    $ttsAudioPath
+                );
+
+                $mixedAudioPath = $ttsAudioPath;
+                if ($this->audioPath && file_exists($this->audioPath)) {
+                    $mixedAudioPath = $tempDir . '/mixed.mp3';
+                    $mixCmd = [
+                        $ffmpegPath, '-y', '-i', $ttsAudioPath, '-i', $this->audioPath,
+                        '-filter_complex', '[0:a]volume=1.0[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=first',
+                        $mixedAudioPath
+                    ];
+                    $mixProc = new Process($mixCmd);
+                    $mixProc->setTimeout(3600);
+                    $mixProc->run();
+                }
+
+                $assFile = $tempDir . '/subs.ass';
+                $assService = new AssSubtitleService();
+                $assService->generateAssSubtitles($wordTimestamps, $this->captionStyleOptions, $assFile, $this->width, $this->height);
+
+                $fontPath = $this->config['font_path'] ?? '';
+                if (!empty($fontPath) && is_dir(dirname($fontPath))) {
+                    $assFilter = sprintf("ass='%s':fontsdir='%s'", str_replace("'", "\\'", $assFile), str_replace("'", "\\'", dirname($fontPath)));
+                } else {
+                    $assFilter = sprintf("ass='%s'", str_replace("'", "\\'", $assFile));
+                }
+
+                $burnCmd = [
+                    $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
+                    '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
+                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
+                    $outputPath
+                ];
+                $burnProc = new Process($burnCmd);
+                $burnProc->setTimeout(3600);
+                $burnProc->run();
+
+                if (!$burnProc->isSuccessful()) {
+                    throw new VideoAutomatorException("FFMPEG ASS Burn Error: " . $burnProc->getErrorOutput());
+                }
+
+            } elseif ($this->audioPath && file_exists($this->audioPath)) {
                 $audioCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
                     '-map', '0:v:0', '-map', '1:a:0',

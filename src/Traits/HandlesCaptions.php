@@ -6,11 +6,22 @@ trait HandlesCaptions
 {
     protected bool $addCaptions = false;
     protected array $captionStyleOptions = [];
+    protected array $voiceOptions = [];
 
     public function withCaptions(bool $enable = true, array $styleOptions = []): self
     {
         $this->addCaptions = $enable;
         $this->captionStyleOptions = $styleOptions;
+        return $this;
+    }
+
+    public function withPremiumVoice(string $provider, string $model, string $apiKey): self
+    {
+        $this->voiceOptions = [
+            'provider' => $provider,
+            'model' => $model,
+            'apiKey' => $apiKey,
+        ];
         return $this;
     }
 
