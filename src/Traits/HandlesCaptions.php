@@ -123,13 +123,30 @@ trait HandlesCaptions
         $presetStyle = $presets[$preset] ?? $baseStyle;
         $style = array_merge($baseStyle, $presetStyle, $this->captionStyleOptions);
 
-        $fontcolor = $style['fontcolor'] ?? 'white';
+        $fontcolor = $style['primary_color'] ?? ($style['fontcolor'] ?? 'white');
+        if (str_starts_with($fontcolor, '#')) {
+            $fontcolor = ltrim($fontcolor, '#');
+        }
         $fontsize = $style['fontsize'] ?? 36;
         $box = $style['box'] ?? 1;
         $boxcolor = $style['boxcolor'] ?? 'black@0.45';
         $boxborderw = $style['boxborderw'] ?? 24;
+        
         $x = $style['x'] ?? '(w-text_w)/2';
         $y = $style['y'] ?? 'h-text_h-180';
+        
+        // Alignment overriding Y
+        if (isset($this->captionStyleOptions['alignment'])) {
+            $alignment = (int) $this->captionStyleOptions['alignment'];
+            if ($alignment === 5) {
+                $y = '(h-text_h)/2';
+            } elseif ($alignment === 8) {
+                $y = '150';
+            } elseif ($alignment === 2) {
+                $y = 'h-text_h-180';
+            }
+        }
+        
         $line_spacing = $style['line_spacing'] ?? 12;
         $shadowcolor = $style['shadowcolor'] ?? '';
         $shadowx = $style['shadowx'] ?? 0;
@@ -143,6 +160,11 @@ trait HandlesCaptions
             "y={$y}",
             "line_spacing={$line_spacing}",
         ];
+        
+        if (!empty($style['fontname'])) {
+            $fontNameStr = str_replace(['\\', ':', "'"], ['/', '\\:', "\\'"], $style['fontname']);
+            $filterParams[] = "font='{$fontNameStr}'";
+        }
 
         if ($box) {
             $filterParams[] = "box=1";
