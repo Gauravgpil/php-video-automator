@@ -198,8 +198,8 @@ class AiTextService
         }
 
         try {
-            $wordCount = (int)($duration * 2.5);
-            $sentenceCount = max(2, (int)($duration / 6)); // roughly a sentence every 6 seconds.
+            $wordCount = (int)($duration * 2.1);
+            $sentenceCount = max(2, (int)($duration / 6));
             
             $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging, highly emotional, and genuinely human voiceover script. Use conversational phrasing, a natural flow, and include dramatic pauses (represented by ellipses '...' or em-dashes '—'). Avoid sounding like an AI, a generic corporate announcer, or a news reader.\nIMPORTANT: The video is exactly {$duration} seconds long. You MUST write EXACTLY {$wordCount} words. If you write less than {$wordCount} words, there will be dead silence at the end of the video. Count your words and ensure the script is extremely close to {$wordCount} words. Split into roughly {$sentenceCount} distinct sentences. Do not include any visual directions, just the spoken text.";
             

@@ -245,7 +245,8 @@ class ImageToVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $durationStr = (string)(count($this->images) * $this->imageDuration);
+            $targetDuration = count($this->images) * $this->imageDuration;
+            $durationStr = (string)$targetDuration;
             $wordTimestamps = [];
             $ttsAudioPath = '';
 
@@ -265,10 +266,29 @@ class ImageToVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
-                    if ($ttsDuration > 0) {
-                        $actualDuration = max((count($this->images) * $this->imageDuration), $ttsDuration + 1.0);
-                        $this->imageDuration = $actualDuration / max(1, count($this->images));
-                        $durationStr = (string)$actualDuration;
+                    
+                    // Safety net: if audio is somehow longer than the chosen video duration, speed it up to fit perfectly
+                    if ($ttsDuration > $targetDuration) {
+                        $speedFactor = $ttsDuration / ($targetDuration - 0.5); // 0.5s margin
+                        if ($speedFactor > 1.0) {
+                            foreach ($wordTimestamps as &$wt) {
+                                $wt['start'] = round($wt['start'] / $speedFactor, 4);
+                                $wt['end'] = round($wt['end'] / $speedFactor, 4);
+                            }
+                            unset($wt);
+                            
+                            $tempTtsPath = $tempDir . '/tts_spedup.mp3';
+                            $tempoCmd = [
+                                $ffmpegPath, '-y', '-i', $ttsAudioPath,
+                                '-filter:a', "atempo={$speedFactor}",
+                                $tempTtsPath
+                            ];
+                            $tempoProc = new Process($tempoCmd);
+                            $tempoProc->run();
+                            if ($tempoProc->isSuccessful()) {
+                                $ttsAudioPath = $tempTtsPath;
+                            }
+                        }
                     }
                 }
             }
