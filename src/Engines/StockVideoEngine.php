@@ -305,6 +305,35 @@ class StockVideoEngine
         }
 
         try {
+            $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
+            $durationStr = (string)(count($this->videos) * $this->maxClipDuration);
+            $wordTimestamps = [];
+            $ttsAudioPath = '';
+
+            if (!empty($this->voiceOptions)) {
+                $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
+                $voiceService = new AiVoiceService();
+                $ttsAudioPath = $tempDir . '/tts.mp3';
+                
+                $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
+                    $captionsText, 
+                    $this->voiceOptions['provider'], 
+                    $this->voiceOptions['model'], 
+                    $this->voiceOptions['apiKey'], 
+                    $ttsAudioPath
+                );
+
+                if (file_exists($ttsAudioPath)) {
+                    $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
+                    $ttsDuration = (float) trim((string) shell_exec($cmd));
+                    if ($ttsDuration > 0) {
+                        $actualDuration = max((count($this->videos) * $this->maxClipDuration), $ttsDuration + 1.0);
+                        $this->maxClipDuration = $actualDuration / max(1, count($this->videos));
+                        $durationStr = (string)$actualDuration;
+                    }
+                }
+            }
+
             $clips = [];
             
             foreach ($this->videos as $index => $videoUrl) {
@@ -328,7 +357,6 @@ class StockVideoEngine
             }
             file_put_contents($listPath, $listContent);
 
-            $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
             $rawOutput = ($this->audioPath || !empty($this->voiceOptions)) ? $tempDir . '/raw_output.mp4' : $outputPath;
             
             $command = [
@@ -344,21 +372,7 @@ class StockVideoEngine
                 throw new VideoAutomatorException("FFMPEG Concat Error: " . $process->getErrorOutput());
             }
 
-            $durationStr = (string)(count($this->videos) * $this->maxClipDuration);
-
             if (!empty($this->voiceOptions)) {
-                $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
-                $voiceService = new AiVoiceService();
-                $ttsAudioPath = $tempDir . '/tts.mp3';
-                
-                $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
-                    $captionsText, 
-                    $this->voiceOptions['provider'], 
-                    $this->voiceOptions['model'], 
-                    $this->voiceOptions['apiKey'], 
-                    $ttsAudioPath
-                );
-
                 $mixedAudioPath = $ttsAudioPath;
                 if ($this->audioPath && file_exists($this->audioPath)) {
                     $mixedAudioPath = $tempDir . '/mixed.mp3';
