@@ -74,6 +74,7 @@ class AiVoiceService
                 'voice'            => $model ?: 'leah',
                 'format'           => 'mp3',
                 'return_durations' => true,
+                'speed'            => 0.88,
             ],
         ]);
 
