@@ -363,8 +363,9 @@ class StockVideoEngine
                 if ($this->audioPath && file_exists($this->audioPath)) {
                     $mixedAudioPath = $tempDir . '/mixed.mp3';
                     $mixCmd = [
-                        $ffmpegPath, '-y', '-i', $ttsAudioPath, '-i', $this->audioPath,
-                        '-filter_complex', '[0:a]volume=1.0[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=first',
+                        $ffmpegPath, '-y', '-i', $ttsAudioPath, '-stream_loop', '-1', '-i', $this->audioPath,
+                        '-filter_complex', '[0:a]volume=1.0,apad[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=longest',
+                        '-t', $durationStr,
                         $mixedAudioPath
                     ];
                     $mixProc = new Process($mixCmd);

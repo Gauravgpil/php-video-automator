@@ -198,11 +198,11 @@ class AiTextService
         }
 
         try {
-            // Estimate a comfortable speaking rate of about ~130 words per minute (approx 2 words per second).
-            $wordCount = (int)($duration * 2.2);
+            // Estimate a comfortable speaking rate of about ~150 words per minute (approx 2.5 words per second).
+            $wordCount = (int)($duration * 2.5);
             $sentenceCount = max(2, (int)($duration / 6)); // roughly a sentence every 6 seconds.
             
-            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging voiceover script for this video. The video is exactly {$duration} seconds long. Therefore, write a script of roughly {$wordCount} words, split into exactly {$sentenceCount} distinct sentences separated by periods. Do not include any visual directions, just the spoken text.";
+            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging voiceover script for this video.\nIMPORTANT: The video is exactly {$duration} seconds long. You MUST write EXACTLY {$wordCount} words. If you write less than {$wordCount} words, there will be dead silence at the end of the video. Count your words and ensure the script is extremely close to {$wordCount} words. Split into roughly {$sentenceCount} distinct sentences separated by periods. Do not include any visual directions, just the spoken text.";
             
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
