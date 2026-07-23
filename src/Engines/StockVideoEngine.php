@@ -321,7 +321,9 @@ class StockVideoEngine
                     $this->voiceOptions['provider'], 
                     $this->voiceOptions['model'], 
                     $this->voiceOptions['apiKey'], 
-                    $ttsAudioPath
+                    $ttsAudioPath,
+                    $this->voiceOptions['voiceId'] ?? '',
+                    $this->voiceOptions['speed'] ?? 1.0
                 );
 
                 if (file_exists($ttsAudioPath)) {

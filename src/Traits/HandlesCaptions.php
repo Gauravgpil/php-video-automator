@@ -15,12 +15,14 @@ trait HandlesCaptions
         return $this;
     }
 
-    public function withPremiumVoice(string $provider, string $model, string $apiKey): self
+    public function withPremiumVoice(string $provider, string $model, string $apiKey, string $voiceId = '', float $speed = 1.0): self
     {
         $this->voiceOptions = [
             'provider' => $provider,
             'model' => $model,
             'apiKey' => $apiKey,
+            'voiceId' => $voiceId,
+            'speed' => $speed,
         ];
         return $this;
     }

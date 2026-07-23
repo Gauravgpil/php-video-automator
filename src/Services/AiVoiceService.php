@@ -16,19 +16,19 @@ class AiVoiceService
         $this->client = new Client(['timeout' => 60.0]);
     }
 
-    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile): array
+    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         return match ($provider) {
-            'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile),
-            'lmnt'   => $this->generateLmnt($text, $model, $apiKey, $outputFile),
-            'openai' => $this->generateOpenAI($text, $model, $apiKey, $outputFile),
+            'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $voiceId, $speed),
+            'lmnt'   => $this->generateLmnt($text, $model, $apiKey, $outputFile, $voiceId, $speed),
+            'openai' => $this->generateOpenAI($text, $model, $apiKey, $outputFile, $voiceId, $speed),
             default  => throw new InvalidArgumentException("Unsupported voice provider: {$provider}"),
         };
     }
 
-    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile): array
+    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
-        $voiceId  = '21m00Tcm4TlvDq8ikWAM';
+        $voiceId  = !empty($voiceId) ? $voiceId : '21m00Tcm4TlvDq8ikWAM';
         $response = $this->client->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}/with-timestamps", [
             'headers' => [
                 'xi-api-key'   => $apiKey,
@@ -62,7 +62,7 @@ class AiVoiceService
         );
     }
 
-    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile): array
+    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
             'headers' => [
@@ -71,10 +71,10 @@ class AiVoiceService
             ],
             'json' => [
                 'text'             => $text,
-                'voice'            => $model ?: 'leah',
+                'voice'            => !empty($voiceId) ? $voiceId : ($model ?: 'leah'),
                 'format'           => 'mp3',
                 'return_durations' => true,
-                'speed'            => 0.88,
+                'speed'            => $speed > 0 ? $speed : 1.0,
             ],
         ]);
 
@@ -119,19 +119,25 @@ class AiVoiceService
         return $this->approximateWordTimestamps($text, $outputFile);
     }
 
-    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile): array
+    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
+        $payload = [
+            'model'           => $model ?: 'tts-1',
+            'input'           => $text,
+            'voice'           => !empty($voiceId) ? $voiceId : 'alloy',
+            'response_format' => 'mp3',
+        ];
+        
+        if ($speed != 1.0 && $speed > 0) {
+            $payload['speed'] = $speed;
+        }
+
         $response = $this->client->post('https://api.openai.com/v1/audio/speech', [
             'headers' => [
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type'  => 'application/json',
             ],
-            'json' => [
-                'model'           => $model ?: 'tts-1',
-                'input'           => $text,
-                'voice'           => 'alloy',
-                'response_format' => 'mp3',
-            ],
+            'json' => $payload,
         ]);
 
         file_put_contents($outputFile, (string) $response->getBody());
