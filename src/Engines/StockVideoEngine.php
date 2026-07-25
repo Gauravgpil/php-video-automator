@@ -316,42 +316,25 @@ class StockVideoEngine
                 $voiceService = new AiVoiceService();
                 $ttsAudioPath = $tempDir . '/tts.mp3';
                 
+                $voiceModel = !empty($this->voiceOptions['voiceId']) ? $this->voiceOptions['voiceId'] : ($this->voiceOptions['model'] ?? '');
+                $voiceSpeed = (float) ($this->voiceOptions['speed'] ?? 1.0);
+
                 $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
                     $captionsText, 
                     $this->voiceOptions['provider'], 
-                    $this->voiceOptions['model'], 
+                    $voiceModel, 
                     $this->voiceOptions['apiKey'], 
                     $ttsAudioPath,
-                    $this->voiceOptions['voiceId'] ?? '',
-                    $this->voiceOptions['speed'] ?? 1.0
+                    $voiceSpeed
                 );
 
                 if (file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
                     
-                    // Safety net: if audio is somehow longer than the chosen video duration, speed it up to fit perfectly
                     if ($ttsDuration > $targetDuration) {
-                        $speedFactor = $ttsDuration / ($targetDuration - 0.5); // 0.5s margin
-                        if ($speedFactor > 1.0) {
-                            foreach ($wordTimestamps as &$wt) {
-                                $wt['start'] = round($wt['start'] / $speedFactor, 4);
-                                $wt['end'] = round($wt['end'] / $speedFactor, 4);
-                            }
-                            unset($wt);
-                            
-                            $tempTtsPath = $tempDir . '/tts_spedup.mp3';
-                            $tempoCmd = [
-                                $ffmpegPath, '-y', '-i', $ttsAudioPath,
-                                '-filter:a', "atempo={$speedFactor}",
-                                $tempTtsPath
-                            ];
-                            $tempoProc = new Process($tempoCmd);
-                            $tempoProc->run();
-                            if ($tempoProc->isSuccessful()) {
-                                $ttsAudioPath = $tempTtsPath;
-                            }
-                        }
+                        $targetDuration = ceil($ttsDuration + 0.5);
+                        $durationStr = (string)$targetDuration;
                     }
                 }
             }
@@ -421,7 +404,7 @@ class StockVideoEngine
                 }
 
                 $burnCmd = [
-                    $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
+                    $ffmpegPath, '-y', '-stream_loop', '-1', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
                     '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
                     $outputPath

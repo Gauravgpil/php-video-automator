@@ -13,22 +13,27 @@ class AiVoiceService
 
     public function __construct()
     {
-        $this->client = new Client(['timeout' => 60.0]);
+        $this->client = new Client([
+            'timeout'         => 120.0,
+            'connect_timeout' => 15.0,
+            'http_errors'     => true,
+        ]);
     }
 
-    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
+    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
     {
         return match ($provider) {
-            'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $voiceId, $speed),
-            'lmnt'   => $this->generateLmnt($text, $model, $apiKey, $outputFile, $voiceId, $speed),
-            'openai' => $this->generateOpenAI($text, $model, $apiKey, $outputFile, $voiceId, $speed),
+            'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $speed),
+            'lmnt'   => $this->generateLmnt($text, $model, $apiKey, $outputFile, $speed),
+            'openai' => $this->generateOpenAI($text, $model, $apiKey, $outputFile, $speed),
             default  => throw new InvalidArgumentException("Unsupported voice provider: {$provider}"),
         };
     }
 
-    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
+    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
     {
-        $voiceId  = !empty($voiceId) ? $voiceId : '21m00Tcm4TlvDq8ikWAM';
+        $elevenSpeed = max(0.7, min(1.2, $speed > 0 ? $speed : 1.0));
+        $voiceId  = !empty($model) ? $model : '21m00Tcm4TlvDq8ikWAM';
         $response = $this->client->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}/with-timestamps", [
             'headers' => [
                 'xi-api-key'   => $apiKey,
@@ -36,24 +41,28 @@ class AiVoiceService
             ],
             'json' => [
                 'text'           => $text,
-                'model_id'       => $model ?: 'eleven_multilingual_v2',
+                'model_id'       => 'eleven_multilingual_v2',
                 'voice_settings' => [
                     'stability'        => 0.5,
                     'similarity_boost' => 0.75,
+                    'speed'            => $elevenSpeed,
                 ],
             ],
         ]);
 
-        $data        = json_decode((string) $response->getBody(), true);
-        $audioBase64 = $data['audio_base64'] ?? '';
+        $data = json_decode((string) $response->getBody(), true);
 
-        if (empty($audioBase64)) {
+        if (empty($data['audio_base64'])) {
             throw new RuntimeException('No audio returned from ElevenLabs.');
         }
 
-        file_put_contents($outputFile, base64_decode($audioBase64));
-
+        file_put_contents($outputFile, base64_decode($data['audio_base64']), LOCK_EX);
         $alignment = $data['alignment'] ?? [];
+        unset($data);
+
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
 
         return $this->buildWordsFromCharacters(
             $alignment['characters']                    ?? [],
@@ -62,39 +71,67 @@ class AiVoiceService
         );
     }
 
-    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
+    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
     {
-        $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
-            'headers' => [
-                'X-API-Key'    => $apiKey,
-                'Content-Type' => 'application/json',
-            ],
-            'json' => [
-                'text'             => $text,
-                'voice'            => !empty($voiceId) ? $voiceId : ($model ?: 'leah'),
-                'format'           => 'mp3',
-                'return_durations' => true,
-                'speed'            => $speed > 0 ? $speed : 1.0,
-            ],
-        ]);
+        $lmntSpeed = max(0.5, min(2.0, $speed > 0 ? $speed : 1.0));
+        $voice = !empty($model) ? $model : 'leah';
 
-        $data        = json_decode((string) $response->getBody(), true);
-        $audioBase64 = $data['audio'] ?? '';
+        try {
+            $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
+                'headers' => [
+                    'X-API-Key'    => $apiKey,
+                    'Content-Type' => 'application/json',
+                ],
+                'json' => [
+                    'text'              => $text,
+                    'voice'             => $voice,
+                    'format'            => 'mp3',
+                    'return_durations'  => true,
+                    'return_timestamps' => true,
+                    'speed'             => $lmntSpeed,
+                ],
+            ]);
+        } catch (Throwable $e) {
+            if ($voice !== 'leah') {
+                $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
+                    'headers' => [
+                        'X-API-Key'    => $apiKey,
+                        'Content-Type' => 'application/json',
+                    ],
+                    'json' => [
+                        'text'              => $text,
+                        'voice'             => 'leah',
+                        'format'            => 'mp3',
+                        'return_durations'  => true,
+                        'return_timestamps' => true,
+                        'speed'             => $lmntSpeed,
+                    ],
+                ]);
+            } else {
+                throw $e;
+            }
+        }
 
-        if (empty($audioBase64)) {
+        $data = json_decode((string) $response->getBody(), true);
+
+        if (empty($data['audio'])) {
             throw new RuntimeException('No audio returned from LMNT.');
         }
 
-        file_put_contents($outputFile, base64_decode($audioBase64));
+        file_put_contents($outputFile, base64_decode($data['audio']), LOCK_EX);
+        $durations = $data['durations'] ?? $data['timestamps'] ?? [];
+        unset($data);
 
-        $durations = $data['durations'] ?? [];
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
 
         if (!empty($durations)) {
             $words  = [];
             $cursor = 0.0;
 
             foreach ($durations as $entry) {
-                $wordText = trim((string) ($entry['text'] ?? ''));
+                $wordText = trim((string) ($entry['text'] ?? $entry['word'] ?? ''));
 
                 if ($wordText === '') {
                     continue;
@@ -119,28 +156,26 @@ class AiVoiceService
         return $this->approximateWordTimestamps($text, $outputFile);
     }
 
-    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
+    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
     {
-        $payload = [
-            'model'           => $model ?: 'tts-1',
-            'input'           => $text,
-            'voice'           => !empty($voiceId) ? $voiceId : 'alloy',
-            'response_format' => 'mp3',
-        ];
-        
-        if ($speed != 1.0 && $speed > 0) {
-            $payload['speed'] = $speed;
-        }
+        $openAiSpeed = max(0.25, min(4.0, $speed > 0 ? $speed : 1.0));
+        $validVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer', 'ash', 'ballad', 'coral', 'sage', 'verse'];
+        $voice = in_array(strtolower($model), $validVoices) ? strtolower($model) : 'alloy';
 
-        $response = $this->client->post('https://api.openai.com/v1/audio/speech', [
+        $this->client->post('https://api.openai.com/v1/audio/speech', [
+            'sink'    => $outputFile,
             'headers' => [
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type'  => 'application/json',
             ],
-            'json' => $payload,
+            'json' => [
+                'model'           => 'tts-1',
+                'input'           => $text,
+                'voice'           => $voice,
+                'response_format' => 'mp3',
+                'speed'           => $openAiSpeed,
+            ],
         ]);
-
-        file_put_contents($outputFile, (string) $response->getBody());
 
         return $this->approximateWordTimestamps($text, $outputFile);
     }
