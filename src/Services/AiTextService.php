@@ -10,12 +10,14 @@ class AiTextService
 {
     protected string $apiKey;
     protected string $provider;
+    protected string $model;
     protected Client $client;
 
-    public function __construct(string $apiKey, string $provider = 'openai')
+    public function __construct(string $apiKey, string $provider = 'openai', string $model = 'gpt-4o-mini')
     {
         $this->apiKey = $apiKey;
         $this->provider = $provider;
+        $this->model = $model;
         $this->client = new Client(['timeout' => 60]);
     }
 
@@ -41,7 +43,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-3.5-turbo',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
@@ -111,7 +113,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
@@ -162,7 +164,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
@@ -209,7 +211,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
