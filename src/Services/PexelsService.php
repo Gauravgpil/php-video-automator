@@ -37,7 +37,7 @@ class PexelsService
 
             return $data['videos'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch videos from Pexels: " . $e->getMessage());
+            throw new VideoAutomatorException("Failed to fetch videos from media engine: " . $e->getMessage());
         }
     }
 
@@ -55,7 +55,7 @@ class PexelsService
 
             return $data['photos'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch images from Pexels: " . $e->getMessage());
+            throw new VideoAutomatorException("Failed to fetch images from media engine: " . $e->getMessage());
         }
     }
 }

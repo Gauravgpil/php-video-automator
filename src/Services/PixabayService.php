@@ -36,7 +36,7 @@ class PixabayService
 
             return $data['hits'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch videos from Pixabay: " . $e->getMessage());
+            throw new VideoAutomatorException("Failed to fetch videos from stock engine: " . $e->getMessage());
         }
     }
 
@@ -57,7 +57,7 @@ class PixabayService
 
             return $data['hits'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch images from Pixabay: " . $e->getMessage());
+            throw new VideoAutomatorException("Failed to fetch images from stock engine: " . $e->getMessage());
         }
     }
 }
