@@ -276,6 +276,35 @@ class ImageToVideoEngine
                     $ttsAudioPath,
                     $voiceSpeed
                 );
+
+                if (file_exists($ttsAudioPath) && !empty($wordTimestamps)) {
+                    $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
+
+                    if ($ttsDuration > 0 && $ttsDuration > $finalVideoDuration) {
+                        $smartTrimPoint = $this->findSmartTrimPoint($wordTimestamps, $finalVideoDuration);
+
+                        if ($smartTrimPoint > 0 && $smartTrimPoint < $ttsDuration) {
+                            $trimmedAudioPath = $tempDir . '/tts_trimmed.mp3';
+                            $trimCmd = [
+                                $ffmpegPath, '-y',
+                                '-i', $ttsAudioPath,
+                                '-t', number_format($smartTrimPoint, 4, '.', ''),
+                                '-af', 'afade=t=out:st=' . number_format(max(0, $smartTrimPoint - 0.25), 4, '.', '') . ':d=0.25',
+                                '-c:a', 'libmp3lame', '-b:a', '128k',
+                                $trimmedAudioPath,
+                            ];
+                            $proc = new Process($trimCmd);
+                            $proc->setTimeout(120);
+                            $proc->run();
+
+                            if ($proc->isSuccessful() && file_exists($trimmedAudioPath)) {
+                                @unlink($ttsAudioPath);
+                                rename($trimmedAudioPath, $ttsAudioPath);
+                                $wordTimestamps = array_values(array_filter($wordTimestamps, fn($w) => $w['start'] < $smartTrimPoint));
+                            }
+                        }
+                    }
+                }
             }
 
             $perImageDuration = round($finalVideoDuration / $imageCount, 4);
@@ -376,6 +405,37 @@ class ImageToVideoEngine
             $outputPath,
         ];
         $this->runProcess($burnCmd, 'Subtitle burn');
+    }
+
+    protected function findSmartTrimPoint(array $wordTimestamps, float $maxDuration): float
+    {
+        $sentenceEndChars = ['.', '!', '?', '…'];
+        $lastSentenceEnd = 0.0;
+        $lastWordEnd = 0.0;
+
+        foreach ($wordTimestamps as $word) {
+            $wordEnd = (float) ($word['end'] ?? 0);
+            $wordText = rtrim((string) ($word['word'] ?? ''));
+
+            if ($wordEnd <= $maxDuration) {
+                $lastWordEnd = $wordEnd;
+
+                $lastChar = mb_substr($wordText, -1);
+                if (in_array($lastChar, $sentenceEndChars, true)) {
+                    $lastSentenceEnd = $wordEnd;
+                }
+            }
+        }
+
+        if ($lastSentenceEnd > 0.0) {
+            return $lastSentenceEnd;
+        }
+
+        if ($lastWordEnd > 0.0) {
+            return $lastWordEnd;
+        }
+
+        return $maxDuration;
     }
 
     protected function probeDuration(string $ffmpegPath, string $filePath): float
