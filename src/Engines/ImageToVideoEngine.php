@@ -280,17 +280,6 @@ class ImageToVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
                     if ($ttsDuration > 0) {
-                        $ratio = $ttsDuration / $baseDuration;
-                        
-                        // Limit clamping to a natural range: max 15% speedup, max 10% slowdown
-                        $clampedRatio = min(1.15, max(0.90, $ratio));
-                        
-                        if (abs($clampedRatio - 1.0) > 0.02) {
-                            $ttsAudioPath = $this->applyNaturalAtempo($ffmpegPath, $ttsAudioPath, $tempDir, $clampedRatio, $wordTimestamps);
-                            $ttsDuration = $ttsDuration / $clampedRatio;
-                        }
-                        
-                        // If voiceover is still longer than requested duration, extend the video gracefully
                         if ($ttsDuration > $finalVideoDuration) {
                             $finalVideoDuration = $ttsDuration;
                         }
@@ -348,29 +337,6 @@ class ImageToVideoEngine
         }
     }
 
-    protected function applyNaturalAtempo(string $ffmpegPath, string $ttsAudioPath, string $tempDir, float $ratio, array &$wordTimestamps): string
-    {
-        $clampedPath = $tempDir . '/tts_clamped_' . uniqid() . '.mp3';
-        $filter = sprintf('atempo=%.4f', $ratio);
-
-        $clampCmd = [
-            $ffmpegPath, '-y', '-i', $ttsAudioPath,
-            '-filter:a', $filter,
-            $clampedPath,
-        ];
-
-        $proc = new Process($clampCmd);
-        $proc->setTimeout(120);
-        $proc->run();
-
-        if ($proc->isSuccessful() && file_exists($clampedPath)) {
-            @unlink($ttsAudioPath);
-            $wordTimestamps = $this->rescaleTimestamps($wordTimestamps, $ratio);
-            return $clampedPath;
-        }
-
-        return $ttsAudioPath;
-    }
 
     protected function burnSubtitlesAndMergeAudio(string $ffmpegPath, string $rawOutput, string $ttsAudioPath, array $wordTimestamps, string $outputPath, string $durationStr, string $tempDir): void
     {
