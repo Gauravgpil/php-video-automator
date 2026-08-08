@@ -252,13 +252,11 @@ class ImageToVideoEngine
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
             $imageCount = count($this->images);
 
-            $strictDuration = $this->targetDuration !== null
+            $baseDuration = $this->targetDuration !== null
                 ? (float) $this->targetDuration
                 : (float) ($imageCount * $this->imageDuration);
 
-            $perImageDuration = round($strictDuration / $imageCount, 4);
-            $durationStr = number_format($strictDuration, 4, '.', '');
-
+            $finalVideoDuration = $baseDuration;
             $wordTimestamps = [];
             $ttsAudioPath = '';
 
@@ -281,11 +279,27 @@ class ImageToVideoEngine
 
                 if (file_exists($ttsAudioPath)) {
                     $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
-                    if ($ttsDuration > $strictDuration) {
-                        $ttsAudioPath = $this->clampAudioToTarget($ffmpegPath, $ttsAudioPath, $tempDir, $strictDuration, $ttsDuration, $wordTimestamps);
+                    if ($ttsDuration > 0) {
+                        $ratio = $ttsDuration / $baseDuration;
+                        
+                        // Limit clamping to a natural range: max 15% speedup, max 10% slowdown
+                        $clampedRatio = min(1.15, max(0.90, $ratio));
+                        
+                        if (abs($clampedRatio - 1.0) > 0.02) {
+                            $ttsAudioPath = $this->applyNaturalAtempo($ffmpegPath, $ttsAudioPath, $tempDir, $clampedRatio, $wordTimestamps);
+                            $ttsDuration = $ttsDuration / $clampedRatio;
+                        }
+                        
+                        // If voiceover is still longer than requested duration, extend the video gracefully
+                        if ($ttsDuration > $finalVideoDuration) {
+                            $finalVideoDuration = $ttsDuration;
+                        }
                     }
                 }
             }
+
+            $perImageDuration = round($finalVideoDuration / $imageCount, 4);
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
             foreach ($this->images as $index => $imageUrl) {
@@ -334,23 +348,14 @@ class ImageToVideoEngine
         }
     }
 
-    protected function clampAudioToTarget(string $ffmpegPath, string $ttsAudioPath, string $tempDir, float $strictDuration, float $ttsDuration, array &$wordTimestamps): string
+    protected function applyNaturalAtempo(string $ffmpegPath, string $ttsAudioPath, string $tempDir, float $ratio, array &$wordTimestamps): string
     {
-        $ratio = $ttsDuration / $strictDuration;
-        $clampedPath = $tempDir . '/tts_clamped.mp3';
-
-        if ($ratio <= 2.0) {
-            $filter = sprintf('atempo=%.4f', $ratio);
-        } else {
-            $stage1 = min(2.0, sqrt($ratio));
-            $stage2 = $ratio / $stage1;
-            $filter = sprintf('atempo=%.4f,atempo=%.4f', $stage1, $stage2);
-        }
+        $clampedPath = $tempDir . '/tts_clamped_' . uniqid() . '.mp3';
+        $filter = sprintf('atempo=%.4f', $ratio);
 
         $clampCmd = [
             $ffmpegPath, '-y', '-i', $ttsAudioPath,
             '-filter:a', $filter,
-            '-t', number_format($strictDuration, 4, '.', ''),
             $clampedPath,
         ];
 
@@ -360,10 +365,7 @@ class ImageToVideoEngine
 
         if ($proc->isSuccessful() && file_exists($clampedPath)) {
             @unlink($ttsAudioPath);
-            $actualRatio = $this->probeDuration($ffmpegPath, $ttsAudioPath) > 0
-                ? ($ttsDuration / $strictDuration)
-                : $ratio;
-            $wordTimestamps = $this->rescaleTimestamps($wordTimestamps, $actualRatio);
+            $wordTimestamps = $this->rescaleTimestamps($wordTimestamps, $ratio);
             return $clampedPath;
         }
 
