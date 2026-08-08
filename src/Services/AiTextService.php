@@ -200,11 +200,12 @@ class AiTextService
         }
 
         try {
-            $wordCount = (int)($duration * 2.1);
-            $sentenceCount = max(2, (int)($duration / 6));
-            
-            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging, highly emotional, and genuinely human voiceover script. Use conversational phrasing, a natural flow, and include dramatic pauses (represented by ellipses '...' or em-dashes '—'). Avoid sounding like an AI, a generic corporate announcer, or a news reader.\nIMPORTANT: The video is exactly {$duration} seconds long. You MUST write EXACTLY {$wordCount} words. If you write less than {$wordCount} words, there will be dead silence at the end of the video. Count your words and ensure the script is extremely close to {$wordCount} words. Split into roughly {$sentenceCount} distinct sentences. Do not include any visual directions, just the spoken text.";
-            
+            $wordCount = max(5, (int) ($duration * 2.0));
+            $maxTokens = (int) ($wordCount * 1.35);
+            $sentenceCount = max(1, (int) ($duration / 6));
+
+            $systemPrompt = "You are a professional video scriptwriter. Write a concise, engaging voiceover script for the following video concept. The script MUST fit within exactly {$duration} seconds when read aloud at a natural pace. Write EXACTLY {$wordCount} words or fewer — never more. Split into approximately {$sentenceCount} sentences. Output only the spoken text, no stage directions or scene descriptions.";
+
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $this->apiKey,
@@ -213,23 +214,17 @@ class AiTextService
                 'json' => [
                     'model' => $this->model,
                     'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => $systemPrompt
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $prompt
-                        ]
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user', 'content' => $prompt],
                     ],
-                    'max_tokens' => max(150, (int)($wordCount * 1.5)),
-                    'temperature' => 0.7
-                ]
+                    'max_tokens' => $maxTokens,
+                    'temperature' => 0.6,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
             $content = data_get($data, 'choices.0.message.content');
-            
+
             if (!empty($content)) {
                 return trim($content);
             }

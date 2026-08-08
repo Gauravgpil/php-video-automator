@@ -25,6 +25,7 @@ class StockVideoEngine
     protected int $width = 1080;
     protected int $height = 1920;
     protected float $maxClipDuration = 5.0;
+    protected ?int $targetDuration = null;
 
     public function __construct(array $config)
     {
@@ -47,10 +48,16 @@ class StockVideoEngine
         return $this;
     }
 
+    public function setTargetDuration(int $seconds): self
+    {
+        $this->targetDuration = max(1, $seconds);
+        return $this;
+    }
+
     protected function splitIntoChunks(string $script): array
     {
         $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
-        
+
         if (count($sentences) === 1 && strlen($script) > 80) {
             $aiKey = $this->config['ai_image_api_key'] ?? '';
             if (!empty($aiKey)) {
@@ -91,7 +98,7 @@ class StockVideoEngine
 
         $count = $options['count'] ?? 3;
         $randomize = $options['randomize'] ?? true;
-        
+
         $chunksToProcess = $this->chunks;
         if (empty($chunksToProcess)) {
             $chunksToProcess = [$this->script];
@@ -100,7 +107,7 @@ class StockVideoEngine
         $numChunks = count($chunksToProcess);
         $videosPerChunk = array_fill(0, $numChunks, 0);
         $remaining = $count;
-        
+
         $i = 0;
         while ($remaining > 0) {
             $videosPerChunk[$i]++;
@@ -110,7 +117,7 @@ class StockVideoEngine
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
         $usedUrls = [];
-        
+
         $fallbackPool = [];
         try {
             $pixKey = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
@@ -163,7 +170,7 @@ class StockVideoEngine
 
             foreach ($providersToTry as $p) {
                 $key = $apiKey ?: ($this->config[$p . '_api_key'] ?? '');
-                
+
                 try {
                     if ($p === 'pixabay') {
                         if (empty($key)) continue;
@@ -267,10 +274,10 @@ class StockVideoEngine
                         $selectedUrl = $validUrls[$j % max(1, count($validUrls))];
                     }
                 }
-                
+
                 $this->videos[] = $selectedUrl;
                 $usedUrls[] = $selectedUrl;
-                
+
                 $j++;
                 $videosNeeded--;
             }
@@ -306,8 +313,10 @@ class StockVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $targetDuration = count($this->videos) * $this->maxClipDuration;
-            $durationStr = (string)$targetDuration;
+            $strictDuration = $this->targetDuration !== null
+                ? (float) $this->targetDuration
+                : (float) (count($this->videos) * $this->maxClipDuration);
+            $durationStr = (string) $strictDuration;
             $wordTimestamps = [];
             $ttsAudioPath = '';
 
@@ -315,15 +324,15 @@ class StockVideoEngine
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
                 $voiceService = new AiVoiceService();
                 $ttsAudioPath = $tempDir . '/tts.mp3';
-                
+
                 $voiceModel = !empty($this->voiceOptions['voiceId']) ? $this->voiceOptions['voiceId'] : ($this->voiceOptions['model'] ?? '');
                 $voiceSpeed = (float) ($this->voiceOptions['speed'] ?? 1.0);
 
                 $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
-                    $captionsText, 
-                    $this->voiceOptions['provider'], 
-                    $voiceModel, 
-                    $this->voiceOptions['apiKey'], 
+                    $captionsText,
+                    $this->voiceOptions['provider'],
+                    $voiceModel,
+                    $this->voiceOptions['apiKey'],
                     $ttsAudioPath,
                     $voiceSpeed
                 );
@@ -331,16 +340,30 @@ class StockVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
-                    
-                    if ($ttsDuration > $targetDuration) {
-                        $targetDuration = ceil($ttsDuration + 0.5);
-                        $durationStr = (string)$targetDuration;
+
+                    if ($ttsDuration > $strictDuration && $ttsDuration > 0) {
+                        $atempoRatio = min(2.0, max(0.5, $ttsDuration / $strictDuration));
+                        $clampedPath = $tempDir . '/tts_clamped.mp3';
+                        $clampCmd = [
+                            $ffmpegPath, '-y', '-i', $ttsAudioPath,
+                            '-filter:a', "atempo={$atempoRatio}",
+                            '-t', $durationStr,
+                            $clampedPath,
+                        ];
+                        $clampProc = new Process($clampCmd);
+                        $clampProc->setTimeout(300);
+                        $clampProc->run();
+                        if ($clampProc->isSuccessful() && file_exists($clampedPath)) {
+                            @unlink($ttsAudioPath);
+                            $ttsAudioPath = $clampedPath;
+                            $wordTimestamps = $this->rescaleTimestamps($wordTimestamps, $atempoRatio);
+                        }
                     }
                 }
             }
 
             $clips = [];
-            
+
             foreach ($this->videos as $index => $videoUrl) {
                 $rawPath = $tempDir . "/raw_{$index}.mp4";
                 if (!@copy($videoUrl, $rawPath)) {
@@ -351,7 +374,7 @@ class StockVideoEngine
                 $captionText = !empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
                 $text = ($this->addCaptions && empty($this->voiceOptions)) ? $captionText : '';
                 $this->standardizeClip($rawPath, $clipPath, $text);
-                
+
                 $clips[] = $clipPath;
             }
 
@@ -363,10 +386,10 @@ class StockVideoEngine
             file_put_contents($listPath, $listContent);
 
             $rawOutput = ($this->audioPath || !empty($this->voiceOptions)) ? $tempDir . '/raw_output.mp4' : $outputPath;
-            
+
             $command = [
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
-                '-c', 'copy', $rawOutput
+                '-c', 'copy', $rawOutput,
             ];
 
             $process = new Process($command);
@@ -385,7 +408,7 @@ class StockVideoEngine
                         $ffmpegPath, '-y', '-i', $ttsAudioPath, '-stream_loop', '-1', '-i', $this->audioPath,
                         '-filter_complex', '[0:a]volume=1.0,apad[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=longest',
                         '-t', $durationStr,
-                        $mixedAudioPath
+                        $mixedAudioPath,
                     ];
                     $mixProc = new Process($mixCmd);
                     $mixProc->setTimeout(3600);
@@ -407,7 +430,7 @@ class StockVideoEngine
                     $ffmpegPath, '-y', '-stream_loop', '-1', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
                     '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
-                    $outputPath
+                    $outputPath,
                 ];
                 $burnProc = new Process($burnCmd);
                 $burnProc->setTimeout(3600);
@@ -416,13 +439,12 @@ class StockVideoEngine
                 if (!$burnProc->isSuccessful()) {
                     throw new VideoAutomatorException("FFMPEG ASS Burn Error: " . $burnProc->getErrorOutput());
                 }
-
             } elseif ($this->audioPath && file_exists($this->audioPath)) {
                 $audioCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
                     '-map', '0:v:0', '-map', '1:a:0',
                     '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-t', $durationStr,
-                    $outputPath
+                    $outputPath,
                 ];
                 $audioProc = new Process($audioCmd);
                 $audioProc->setTimeout(3600);
@@ -438,33 +460,41 @@ class StockVideoEngine
         }
     }
 
+    protected function rescaleTimestamps(array $wordTimestamps, float $atempoRatio): array
+    {
+        return array_map(static function (array $word) use ($atempoRatio): array {
+            $word['start'] = round($word['start'] / $atempoRatio, 4);
+            $word['end'] = round($word['end'] / $atempoRatio, 4);
+            return $word;
+        }, $wordTimestamps);
+    }
+
     protected function standardizeClip(string $inputPath, string $outputPath, string $text = ''): void
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-        
+
         $filter = "scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps=25";
-        
+
         if ($text !== '') {
             $limit = $this->getCaptionWordwrapLimit($this->width);
             $text = wordwrap($text, $limit, "\n");
             $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
             file_put_contents($txtPath, $text);
-            $fontPath = $this->config['font_path'] ?? '';
-            
+
             $safeTxtPath = str_replace(['\\', ':'], ['/', '\\:'], $txtPath);
-            
+
             $filter .= ',' . $this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
         }
-        
+
         $command = [
-            $ffmpegPath, '-y', 
+            $ffmpegPath, '-y',
             '-stream_loop', '-1',
             '-i', $inputPath,
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
             '-map', '0:v:0', '-map', '1:a:0',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$this->maxClipDuration, '-pix_fmt', 'yuv420p',
-            $outputPath
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string) $this->maxClipDuration, '-pix_fmt', 'yuv420p',
+            $outputPath,
         ];
 
         $process = new Process($command);
@@ -479,7 +509,7 @@ class StockVideoEngine
     protected function cleanup(string $dir): void
     {
         if (!is_dir($dir)) return;
-        $files = array_diff(scandir($dir), ['.','..']);
+        $files = array_diff(scandir($dir), ['.', '..']);
         foreach ($files as $file) {
             @unlink("$dir/$file");
         }
