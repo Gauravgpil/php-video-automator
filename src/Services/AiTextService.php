@@ -4,7 +4,6 @@ namespace PhpVideoAutomator\Services;
 
 use Exception;
 use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Log;
 
 class AiTextService
 {
@@ -18,7 +17,7 @@ class AiTextService
         $this->apiKey = $apiKey;
         $this->provider = $provider;
         $this->model = $model;
-        $this->client = new Client(['timeout' => 60]);
+        $this->client = new Client(['timeout' => 30]);
     }
 
     public function extractStockVideoKeywords(string $prompt): string
@@ -26,7 +25,7 @@ class AiTextService
         if ($this->provider === 'openai') {
             return $this->extractWithOpenAi($prompt);
         }
-        
+
         return $prompt;
     }
 
@@ -47,36 +46,27 @@ class AiTextService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => "Extract 1 to 2 highly visual, concrete, noun-based search terms representing the scene for a stock video search. Only output the keywords. Do not include abstract concepts, punctuation, or conversational text. Output example: 'sunny beach', 'businessman typing'."
+                            'content' => "Extract 1 to 2 highly visual, concrete, noun-based search terms representing the scene for a stock video search. Only output the keywords. Do not include abstract concepts, punctuation, or conversational text. Output example: 'sunny beach', 'businessman typing'.",
                         ],
-                        [
-                            'role' => 'user',
-                            'content' => $prompt
-                        ]
+                        ['role' => 'user', 'content' => $prompt],
                     ],
                     'max_tokens' => 20,
-                    'temperature' => 0.3
-                ]
+                    'temperature' => 0.3,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
-                $keywords = trim($content);
-                $keywords = str_replace(["'", '"', '.', ',', "\n"], '', $keywords);
-                
-                if (empty($keywords)) {
-                    return $prompt;
-                }
-                return $keywords;
-            }
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
-            return $prompt;
+            if (!empty($content)) {
+                $keywords = trim(str_replace(["'", '"', '.', ',', "\n"], '', $content));
+                return !empty($keywords) ? $keywords : $prompt;
+            }
         } catch (Exception $e) {
-            Log::error('OpenAI Text Extraction Error: ' . $e->getMessage());
-            return $prompt;
+            error_log('[PhpVideoAutomator] OpenAI keyword extraction error: ' . $e->getMessage());
         }
+
+        return $prompt;
     }
 
     public function selectBestMediaIndex(string $scene, array $options): int
@@ -98,7 +88,7 @@ class AiTextService
             return 0;
         }
 
-        $optionsText = "";
+        $optionsText = '';
         foreach ($options as $index => $tags) {
             $optionsText .= "Option {$index}: {$tags}\n";
         }
@@ -115,35 +105,25 @@ class AiTextService
                 'json' => [
                     'model' => $this->model,
                     'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => $systemPrompt
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $userPrompt
-                        ]
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user', 'content' => $userPrompt],
                     ],
                     'max_tokens' => 10,
-                    'temperature' => 0.1
-                ]
+                    'temperature' => 0.1,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
-                $content = trim($content);
-                // Extract the first number from the output in case AI adds extra text
-                if (preg_match('/\d+/', $content, $matches)) {
-                    $idx = (int)$matches[0];
-                    if (isset($options[$idx])) {
-                        return $idx;
-                    }
+            $content = trim((string) ($data['choices'][0]['message']['content'] ?? ''));
+
+            if ($content !== '' && preg_match('/\d+/', $content, $matches)) {
+                $idx = (int) $matches[0];
+                if (isset($options[$idx])) {
+                    return $idx;
                 }
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Selection Error: ' . $e->getMessage());
+            error_log('[PhpVideoAutomator] OpenAI media selection error: ' . $e->getMessage());
         }
 
         return 0;
@@ -157,7 +137,7 @@ class AiTextService
 
         try {
             $systemPrompt = "You are a professional video director. The user will provide a long, unpunctuated or comma-heavy video prompt. Your task is to rewrite it into EXACTLY {$targetCount} distinct, highly visual sentences separated by periods. Focus on breaking the visual elements logically into scenes. Do not add conversational filler. Output ONLY the rewritten sentences.";
-            
+
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $this->apiKey,
@@ -166,28 +146,22 @@ class AiTextService
                 'json' => [
                     'model' => $this->model,
                     'messages' => [
-                        [
-                            'role' => 'system',
-                            'content' => $systemPrompt
-                        ],
-                        [
-                            'role' => 'user',
-                            'content' => $script
-                        ]
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user', 'content' => $script],
                     ],
                     'max_tokens' => 150,
-                    'temperature' => 0.3
-                ]
+                    'temperature' => 0.3,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
-            
+            $content = $data['choices'][0]['message']['content'] ?? null;
+
             if (!empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Formatting Error: ' . $e->getMessage());
+            error_log('[PhpVideoAutomator] OpenAI script formatting error: ' . $e->getMessage());
         }
 
         return $script;
@@ -223,13 +197,13 @@ class AiTextService
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
             if (!empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Voiceover Script Error: ' . $e->getMessage());
+            error_log('[PhpVideoAutomator] OpenAI voiceover script error: ' . $e->getMessage());
         }
 
         return $prompt;
