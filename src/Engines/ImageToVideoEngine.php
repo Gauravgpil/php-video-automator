@@ -276,15 +276,6 @@ class ImageToVideoEngine
                     $ttsAudioPath,
                     $voiceSpeed
                 );
-
-                if (file_exists($ttsAudioPath)) {
-                    $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
-                    if ($ttsDuration > 0) {
-                        if ($ttsDuration > $finalVideoDuration) {
-                            $finalVideoDuration = $ttsDuration;
-                        }
-                    }
-                }
             }
 
             $perImageDuration = round($finalVideoDuration / $imageCount, 4);
@@ -381,6 +372,7 @@ class ImageToVideoEngine
             '-threads', (string) $threads,
             '-c:a', 'aac', '-b:a', '128k',
             '-t', $durationStr,
+            '-shortest',
             $outputPath,
         ];
         $this->runProcess($burnCmd, 'Subtitle burn');
@@ -409,23 +401,7 @@ class ImageToVideoEngine
 
     protected function splitIntoChunks(string $script): array
     {
-        $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
-
-        if (count($sentences) === 1 && strlen($script) > 80) {
-            $aiKey = $this->config['ai_image_api_key'] ?? '';
-            if (!empty($aiKey)) {
-                try {
-                    $textService = new AiTextService($aiKey);
-                    $formatted = $textService->smartFormatScript($script, 3);
-                    if (!empty($formatted)) {
-                        $sentences = preg_split('/(?<=[.!?])\s+|\n/', $formatted, -1, PREG_SPLIT_NO_EMPTY);
-                    }
-                } catch (Exception $e) {
-                    error_log('[PhpVideoAutomator] Script formatting failed: ' . $e->getMessage());
-                }
-            }
-        }
-
+        $sentences = preg_split('/(?<=[.!?])\s+|\n/', trim($script), -1, PREG_SPLIT_NO_EMPTY);
         return array_values(array_filter(array_map('trim', $sentences)));
     }
 
