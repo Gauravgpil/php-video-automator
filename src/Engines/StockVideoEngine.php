@@ -325,8 +325,6 @@ class StockVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
                     if ($ttsDuration > 0) {
-                        // Strictly respect the user's selected talking speed.
-                        // Do not artificially compress the audio. If it's longer than the requested duration, extend the video gracefully.
                         if ($ttsDuration > $finalVideoDuration) {
                             $finalVideoDuration = $ttsDuration;
                         }
