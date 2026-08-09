@@ -58,22 +58,11 @@ class StockVideoEngine
         return $this;
     }
 
-    public function setTargetDuration(int $seconds): self
+    public function setTargetDuration(float $seconds): self
     {
-        $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
+        $this->targetDuration = $seconds;
 
-        if (count($sentences) === 1 && strlen($script) > 80) {
-            $aiKey = $this->config['ai_image_api_key'] ?? '';
-            if (! empty($aiKey)) {
-                $textService = new AiTextService($aiKey);
-                $formatted = $textService->smartFormatScript($script, 3);
-                if (! empty($formatted)) {
-                    $sentences = preg_split('/(?<=[.!?])\s+|\n/', $formatted, -1, PREG_SPLIT_NO_EMPTY);
-                }
-            }
-        }
-
-        return array_values(array_filter(array_map('trim', $sentences)));
+        return $this;
     }
 
     public function withAudio(string $audioPath): self
@@ -94,13 +83,6 @@ class StockVideoEngine
     public function setMaxClipDuration(float $seconds): self
     {
         $this->maxClipDuration = $seconds;
-
-        return $this;
-    }
-
-    public function withAudio(string $audioPath): self
-    {
-        $this->audioPath = $audioPath;
 
         return $this;
     }
@@ -478,10 +460,14 @@ class StockVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $targetDuration = count($this->videos) * $this->maxClipDuration;
-            $durationStr = (string) $targetDuration;
+            $videoCount = count($this->videos);
+            $targetDuration = $videoCount * $this->maxClipDuration;
+            $finalVideoDuration = $targetDuration;
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
+            
             $wordTimestamps = [];
             $ttsAudioPath = '';
+            $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
             if (! empty($this->voiceOptions)) {
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
@@ -504,7 +490,6 @@ class StockVideoEngine
             }
 
             $perClipDuration = round($finalVideoDuration / $videoCount, 4);
-            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
 
@@ -517,7 +502,7 @@ class StockVideoEngine
                 $clipPath = $tempDir."/clip_{$index}.mp4";
                 $captionText = ! empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
                 $text = ($this->addCaptions && empty($this->voiceOptions)) ? $captionText : '';
-                $this->standardizeClip($rawPath, $clipPath, $text);
+                $this->standardizeClip($rawPath, $clipPath, $text, $this->maxClipDuration);
 
                 $clips[] = $clipPath;
             }
@@ -535,7 +520,6 @@ class StockVideoEngine
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
                 '-c', 'copy', $rawOutput,
             ];
-            $this->runProcess($concatCmd, 'Concat');
 
             $process = new Process($command);
             $process->setTimeout(3600);

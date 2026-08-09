@@ -55,7 +55,7 @@ class AiImageService
 
             $imageUrl = $this->parseImageResponse($data);
             if (empty($imageUrl)) {
-                Log::warning('OpenAI API returned unrecognized format. Response: '.json_encode($data));
+                error_log('OpenAI API returned unrecognized format. Response: '.json_encode($data));
             }
 
             return $imageUrl;
@@ -70,7 +70,7 @@ class AiImageService
                 throw new VideoAutomatorException('Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.');
             }
 
-            Log::error('OpenAI Image Gen Error: '.$error);
+            error_log('OpenAI Image Gen Error: '.$error);
 
             if (strpos($error, 'does not exist') !== false || strpos($error, 'model') !== false) {
                 try {

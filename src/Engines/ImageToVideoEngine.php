@@ -39,6 +39,8 @@ class ImageToVideoEngine
 
     protected int $imageDuration = 4;
 
+    protected float $targetDuration = 0.0;
+
     public function __construct(array $config)
     {
         $this->config = $config;
@@ -116,7 +118,7 @@ class ImageToVideoEngine
                 try {
                     $query = $textService->extractStockVideoKeywords($chunk);
                 } catch (Exception $e) {
-                    Log::warning("AI Keyword Extraction failed for chunk {$index}: ".$e->getMessage());
+                    error_log("AI Keyword Extraction failed for chunk {$index}: ".$e->getMessage());
                 }
             }
 
@@ -277,7 +279,7 @@ class ImageToVideoEngine
 
             return $result['_final_url'] ?? null;
         } catch (Exception $e) {
-            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
+            error_log("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
         }
 
         return null;
