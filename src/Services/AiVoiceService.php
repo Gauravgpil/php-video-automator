@@ -66,11 +66,18 @@ class AiVoiceService
             gc_collect_cycles();
         }
 
-        return $this->buildWordsFromCharacters(
+        $words = $this->buildWordsFromCharacters(
             $alignment['characters'] ?? [],
             $alignment['character_start_times_seconds'] ?? [],
             $alignment['character_end_times_seconds'] ?? []
         );
+
+        $expectedCount = count(preg_split('/\s+/', trim($text)));
+        if (count($words) < $expectedCount * 0.7) {
+            return $this->approximateWordTimestamps($text, $outputFile);
+        }
+
+        return $words;
     }
 
     protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
@@ -126,6 +133,10 @@ class AiVoiceService
             }
 
             if (! empty($words)) {
+                $expectedCount = count(preg_split('/\s+/', trim($text)));
+                if (count($words) < $expectedCount * 0.7) {
+                    return $this->approximateWordTimestamps($text, $outputFile);
+                }
                 return $words;
             }
         }
