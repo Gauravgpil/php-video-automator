@@ -330,10 +330,14 @@ class ImageToVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $targetDuration = count($this->images) * $this->imageDuration;
-            $durationStr = (string) $targetDuration;
+            $imageCount = count($this->images);
+            $targetDuration = $imageCount * $this->imageDuration;
+            $finalVideoDuration = $targetDuration;
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
+            
             $wordTimestamps = [];
             $ttsAudioPath = '';
+            $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
             if (! empty($this->voiceOptions)) {
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
@@ -352,11 +356,11 @@ class ImageToVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
+                    // We don't dynamically stretch $finalVideoDuration here as it's pre-calibrated.
                 }
             }
 
             $perImageDuration = round($finalVideoDuration / $imageCount, 4);
-            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
 
@@ -387,7 +391,6 @@ class ImageToVideoEngine
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
                 '-c', 'copy', $rawOutput,
             ];
-            $this->runProcess($concatCmd, 'Concat');
 
             $process = new Process($command);
             $process->setTimeout(3600);
