@@ -90,12 +90,10 @@ class ImageToVideoEngine
                 : ($this->width > $this->height ? 'landscape/cinematic frame (16:9 aspect ratio)' : 'square frame (1:1 aspect ratio)');
 
             $prompt = implode(' ', [
-                "Photorealistic cinematic still, {$aspectHint}.",
+                "High quality image, {$aspectHint}.",
                 'Scene: '.trim($chunk).'.',
-                'Ultra-sharp focus, professional color grading, dramatic natural lighting (golden hour or blue hour unless otherwise specified).',
-                'Shot on high-end cinema camera (ARRI, RED), shallow depth of field, film grain texture.',
-                'No text, no watermarks, no logos, no borders, no frame artifacts.',
-                'Composition: rule of thirds, visually striking foreground-to-background depth.',
+                'Clear focus, excellent lighting and composition.',
+                'No text, no watermarks, no borders, no frame artifacts.',
                 'Output must be a single, cohesive, full-bleed image perfectly matching the described scene.',
             ]);
             $this->images[$index] = $service->generateImage($prompt, $size);
