@@ -181,14 +181,12 @@ class AssSubtitleService
 
             $lineStart = (float) ($lineWords[0]['start'] ?? 0);
             $lineEnd = (float) (end($lineWords)['end'] ?? $lineStart + 2.0);
-            
-            // Extend line end to match the start of the next line (or add 2s for the last line)
-            // This prevents subtitles from disappearing too early before the video cuts.
+
+            // Add a small 0.5s padding to the end of the line for better readability
+            // If it's the last line, extend by 2.0s so it doesn't disappear before the video ends.
             if (isset($lines[$index + 1]) && ! empty($lines[$index + 1])) {
                 $nextLineStart = (float) ($lines[$index + 1][0]['start'] ?? $lineEnd);
-                if ($nextLineStart > $lineEnd) {
-                    $lineEnd = $nextLineStart;
-                }
+                $lineEnd = min($lineEnd + 0.5, $nextLineStart);
             } else {
                 $lineEnd += 2.0;
             }
