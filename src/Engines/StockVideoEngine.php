@@ -616,6 +616,7 @@ class StockVideoEngine
             $filter .= ','.$this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
         }
 
+        $durationStr = number_format($duration, 4, '.', '');
         $command = [
             $ffmpegPath, '-y',
             '-stream_loop', '-1',
@@ -623,7 +624,7 @@ class StockVideoEngine
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
             '-map', '0:v:0', '-map', '1:a:0',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string) $this->maxClipDuration, '-pix_fmt', 'yuv420p',
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', $durationStr, '-pix_fmt', 'yuv420p',
             $outputPath,
         ];
 
