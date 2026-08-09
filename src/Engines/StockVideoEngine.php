@@ -107,11 +107,6 @@ class StockVideoEngine
         $count = $options['count'] ?? 3;
         $randomize = $options['randomize'] ?? true;
 
-        $chunksToProcess = $this->chunks;
-        if (empty($chunksToProcess)) {
-            $chunksToProcess = [$this->script];
-        }
-
         $chunksToProcess = ! empty($this->chunks) ? $this->chunks : [$this->script];
         $numChunks = count($chunksToProcess);
 
@@ -120,7 +115,9 @@ class StockVideoEngine
 
         $i = 0;
         while ($remaining > 0) {
-            $videosPerChunk[$i]++;
+            $videosPerChunk[$i % $numChunks]++;
+            $i++;
+            $remaining--;
         }
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
