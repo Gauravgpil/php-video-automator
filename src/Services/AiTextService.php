@@ -202,14 +202,21 @@ class AiTextService
         return $script;
     }
 
-    public function generateVoiceoverScript(string $prompt, int $duration = 30): string
+    public function generateVoiceoverScript(string $prompt, int $duration = 30, float $voiceSpeed = 1.0, string $voiceProvider = 'openai'): string
     {
         if (empty($this->apiKey) || $this->provider !== 'openai') {
             return $prompt;
         }
 
         try {
-            $wordCount = max(10, (int) round($duration * 2.3));
+            $baselineWps = match ($voiceProvider) {
+                'eleven' => 2.6,
+                'lmnt'   => 2.5,
+                default  => 2.3,
+            };
+
+            $effectiveSpeed = max(0.5, min(2.0, $voiceSpeed > 0 ? $voiceSpeed : 1.0));
+            $wordCount = max(10, (int) round($duration * $baselineWps * $effectiveSpeed));
             $maxTokens = max(200, (int) ($wordCount * 1.8));
             $sentenceCount = max(2, (int) ceil($duration / 5));
 
@@ -220,7 +227,7 @@ Your task is to write a professional voiceover script for a {$duration}-second v
 
 RULES (follow all of them strictly):
 1. WORD COUNT: Write EXACTLY {$wordCount} words. Count carefully. Not fewer. Not more.
-2. DURATION FIT: The script must fill the full {$duration} seconds when spoken aloud at a natural, unhurried pace (~2.3 words/second).
+2. DURATION FIT: The script must fill the full {$duration} seconds when spoken aloud at a natural, unhurried pace (~{$baselineWps} words/second).
 3. SENTENCE STRUCTURE: Break the script into approximately {$sentenceCount} distinct, punchy sentences. Use short, powerful clauses for impact.
 4. TONE: Write like a human. Use conversational rhythm, vivid imagery, and emotional beats. Never sound robotic or corporate.
 5. NATURAL PAUSES: Use ellipses "..." or em-dashes "—" to indicate dramatic pauses. These help the TTS engine breathe naturally.
