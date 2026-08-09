@@ -37,7 +37,7 @@ class ImageToVideoEngine
 
     protected int $height = 1920;
 
-    protected int $imageDuration = 4;
+    protected float $imageDuration = 4.0;
 
     protected float $targetDuration = 0.0;
 
