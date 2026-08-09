@@ -20,7 +20,7 @@ class AiVoiceService
         ]);
     }
 
-    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
+    public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         return match ($provider) {
             'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $voiceId, $speed),
@@ -30,7 +30,7 @@ class AiVoiceService
         };
     }
 
-    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
+    protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         $voiceId = ! empty($voiceId) ? $voiceId : '21m00Tcm4TlvDq8ikWAM';
         $response = $this->client->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}/with-timestamps", [
@@ -44,7 +44,7 @@ class AiVoiceService
                 'voice_settings' => [
                     'stability' => 0.5,
                     'similarity_boost' => 0.75,
-                    'speed' => $elevenSpeed,
+                    'speed' => $speed,
                 ],
             ],
         ]);
@@ -71,7 +71,7 @@ class AiVoiceService
         );
     }
 
-    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
+    protected function generateLmnt(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
             'headers' => [
@@ -86,9 +86,6 @@ class AiVoiceService
                 'speed' => $speed > 0 ? $speed : 1.0,
             ],
         ]);
-
-        $data = json_decode((string) $response->getBody(), true);
-        $audioBase64 = $data['audio'] ?? '';
 
         $data = json_decode((string) $response->getBody(), true);
 
@@ -134,7 +131,7 @@ class AiVoiceService
         return $this->approximateWordTimestamps($text, $outputFile);
     }
 
-    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, float $speed = 1.0): array
+    protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         $payload = [
             'model' => $model ?: 'tts-1',
@@ -153,13 +150,7 @@ class AiVoiceService
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type' => 'application/json',
             ],
-            'json' => [
-                'model' => 'tts-1',
-                'input' => $text,
-                'voice' => $voice,
-                'response_format' => 'mp3',
-                'speed' => $openAiSpeed,
-            ],
+            'json' => $payload,
         ]);
 
         return $this->approximateWordTimestamps($text, $outputFile);

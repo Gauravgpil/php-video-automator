@@ -39,6 +39,8 @@ class ImageToVideoEngine
 
     protected int $imageDuration = 4;
 
+    protected float $targetDuration = 0.0;
+
     public function __construct(array $config)
     {
         $this->config = $config;
@@ -116,7 +118,7 @@ class ImageToVideoEngine
                 try {
                     $query = $textService->extractStockVideoKeywords($chunk);
                 } catch (Exception $e) {
-                    Log::warning("AI Keyword Extraction failed for chunk {$index}: ".$e->getMessage());
+                    error_log("AI Keyword Extraction failed for chunk {$index}: ".$e->getMessage());
                 }
             }
 
@@ -277,7 +279,7 @@ class ImageToVideoEngine
 
             return $result['_final_url'] ?? null;
         } catch (Exception $e) {
-            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
+            error_log("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
         }
 
         return null;
@@ -353,7 +355,7 @@ class ImageToVideoEngine
                     $voiceSpeed
                 );
 
-                if (file_exists($ttsAudioPath)) {
+                if (false && file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
                     // We don't dynamically stretch $finalVideoDuration here as it's pre-calibrated.
@@ -373,7 +375,8 @@ class ImageToVideoEngine
                 $clipPath = $tempDir."/clip_{$index}.mp4";
                 $captionText = ! empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
                 $text = ($this->addCaptions && empty($this->voiceOptions)) ? $captionText : '';
-                $this->createClipFromImage($imagePath, $clipPath, $text);
+                
+                $this->createClipFromImage($imagePath, $clipPath, $text, $this->imageDuration);
 
                 $clips[] = $clipPath;
             }
@@ -504,6 +507,8 @@ class ImageToVideoEngine
         $threads = max(1, (int) shell_exec('nproc 2>/dev/null') - 1 ?: 2);
 
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
+            $w2 = $this->width * 2;
+            $h2 = $this->height * 2;
             $filter = "[0:v]scale={$w2}:{$h2}:force_original_aspect_ratio=increase,crop={$w2}:{$h2},setsar=1";
 
             $effects = [

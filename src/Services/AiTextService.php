@@ -11,6 +11,8 @@ class AiTextService
 
     protected string $provider;
 
+    protected string $model;
+
     protected Client $client;
 
     public function __construct(string $apiKey, string $provider = 'openai', string $model = 'gpt-4o-mini')
@@ -60,7 +62,7 @@ class AiTextService
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
             if (! empty($content)) {
                 $keywords = trim($content);
@@ -79,7 +81,7 @@ class AiTextService
                 return ! empty($keywords) ? $keywords : $prompt;
             }
         } catch (Exception $e) {
-            Log::error('OpenAI Text Extraction Error: '.$e->getMessage());
+            error_log('OpenAI Text Extraction Error: '.$e->getMessage());
 
             return $prompt;
         }
@@ -138,7 +140,7 @@ class AiTextService
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
             if (! empty($content)) {
                 $content = trim($content);
@@ -151,7 +153,7 @@ class AiTextService
                 }
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Selection Error: '.$e->getMessage());
+            error_log('OpenAI AI Selection Error: '.$e->getMessage());
         }
 
         return 0;
@@ -189,13 +191,13 @@ class AiTextService
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
             if (! empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Formatting Error: '.$e->getMessage());
+            error_log('OpenAI AI Formatting Error: '.$e->getMessage());
         }
 
         return $script;
@@ -251,13 +253,13 @@ PROMPT;
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $content = data_get($data, 'choices.0.message.content');
+            $content = $data['choices'][0]['message']['content'] ?? null;
 
             if (! empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Voiceover Script Error: '.$e->getMessage());
+            error_log('OpenAI AI Voiceover Script Error: '.$e->getMessage());
         }
 
         return $prompt;
