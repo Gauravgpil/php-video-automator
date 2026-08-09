@@ -461,32 +461,6 @@ class ImageToVideoEngine
     }
 
 
-    protected function burnSubtitlesAndMergeAudio(string $ffmpegPath, string $rawOutput, string $ttsAudioPath, array $wordTimestamps, string $outputPath, string $durationStr, string $tempDir): void
-    {
-        $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
-
-        if (count($sentences) === 1 && strlen($script) > 80) {
-            $aiKey = $this->config['ai_image_api_key'] ?? '';
-            if (! empty($aiKey)) {
-                $textService = new AiTextService($aiKey);
-                $formatted = $textService->smartFormatScript($script, 3);
-                if (! empty($formatted)) {
-                    $sentences = preg_split('/(?<=[.!?])\s+|\n/', $formatted, -1, PREG_SPLIT_NO_EMPTY);
-                }
-            }
-        }
-
-        if ($lastSentenceEnd > 0.0) {
-            return $lastSentenceEnd;
-        }
-
-        if ($lastWordEnd > 0.0) {
-            return $lastWordEnd;
-        }
-
-        return $maxDuration;
-    }
-
     protected function probeDuration(string $ffmpegPath, string $filePath): float
     {
         $ffprobePath = str_replace('ffmpeg', 'ffprobe', $ffmpegPath);
