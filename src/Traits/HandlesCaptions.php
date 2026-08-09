@@ -24,8 +24,8 @@ trait HandlesCaptions
             'provider' => $provider,
             'model' => $model,
             'apiKey' => $apiKey,
-            'voiceId' => $voiceId,
-            'speed' => $speed,
+            'voiceId' => !empty($voiceId) ? $voiceId : $model,
+            'speed' => $speed > 0 ? $speed : 1.0,
         ];
 
         return $this;

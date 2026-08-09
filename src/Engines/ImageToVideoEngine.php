@@ -3,7 +3,6 @@
 namespace PhpVideoAutomator\Engines;
 
 use Exception;
-use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
 use PhpVideoAutomator\Services\AiTextService;
@@ -57,6 +56,12 @@ class ImageToVideoEngine
     {
         $this->captionChunks = $this->splitIntoChunks($captions);
 
+        return $this;
+    }
+
+    public function setTargetDuration(int $seconds): self
+    {
+        $this->targetDuration = max(1, $seconds);
         return $this;
     }
 
@@ -224,6 +229,53 @@ class ImageToVideoEngine
 
                 return $result['_final_url'] ?? null;
             }
+
+            $validItems = [];
+            foreach ($results as $item) {
+                $url = null;
+                if ($provider === 'pixabay') {
+                    $url = $item['largeImageURL'] ?? ($item['webformatURL'] ?? null);
+                } elseif ($provider === 'pexels') {
+                    $url = $item['src']['large2x'] ?? ($item['src']['large'] ?? null);
+                } elseif ($provider === 'wikimedia' || $provider === 'archive') {
+                    $url = $item['url'] ?? null;
+                }
+                if ($url && !in_array($url, $usedUrls)) {
+                    $item['_final_url'] = $url;
+                    $validItems[] = $item;
+                }
+            }
+
+            if (empty($validItems)) {
+                return null;
+            }
+
+            $selectedIndex = 0;
+            if ($textService && !empty($scene)) {
+                $options = [];
+                foreach (array_slice($validItems, 0, 10) as $i => $item) {
+                    $desc = '';
+                    if ($provider === 'pixabay') {
+                        $desc = $item['tags'] ?? '';
+                    } elseif ($provider === 'pexels') {
+                        $path = parse_url($item['url'] ?? '', PHP_URL_PATH) ?? '';
+                        $desc = trim(str_replace('-', ' ', preg_replace('/-\d+\/?$/', '', basename($path))));
+                    } elseif ($provider === 'wikimedia' || $provider === 'archive') {
+                        $desc = $item['title'] ?? '';
+                    }
+                    $options[$i] = $desc;
+                }
+                try {
+                    $selectedIndex = $textService->selectBestMediaIndex($scene, $options);
+                } catch (Exception $e) {
+                    $selectedIndex = 0;
+                }
+            } elseif ($randomize) {
+                $selectedIndex = array_rand(array_slice($validItems, 0, min(3, count($validItems))));
+            }
+
+            $result = $validItems[$selectedIndex] ?? $validItems[0];
+            return $result['_final_url'] ?? null;
         } catch (Exception $e) {
             Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
         }
@@ -294,8 +346,7 @@ class ImageToVideoEngine
                     $this->voiceOptions['model'],
                     $this->voiceOptions['apiKey'],
                     $ttsAudioPath,
-                    $this->voiceOptions['voiceId'] ?? '',
-                    $this->voiceOptions['speed'] ?? 1.0
+                    $voiceSpeed
                 );
 
                 if (file_exists($ttsAudioPath)) {
@@ -303,6 +354,9 @@ class ImageToVideoEngine
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
                 }
             }
+
+            $perImageDuration = round($finalVideoDuration / $imageCount, 4);
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
 
@@ -333,6 +387,7 @@ class ImageToVideoEngine
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
                 '-c', 'copy', $rawOutput,
             ];
+            $this->runProcess($concatCmd, 'Concat');
 
             $process = new Process($command);
             $process->setTimeout(3600);
@@ -384,7 +439,9 @@ class ImageToVideoEngine
 
             } elseif ($this->audioPath && file_exists($this->audioPath)) {
                 $audioCmd = [
-                    $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
+                    $ffmpegPath, '-y',
+                    '-i', $rawOutput,
+                    '-stream_loop', '-1', '-i', $this->audioPath,
                     '-map', '0:v:0', '-map', '1:a:0',
                     '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-t', $durationStr,
                     $outputPath,
@@ -403,7 +460,8 @@ class ImageToVideoEngine
         }
     }
 
-    protected function splitIntoChunks(string $script): array
+
+    protected function burnSubtitlesAndMergeAudio(string $ffmpegPath, string $rawOutput, string $ttsAudioPath, array $wordTimestamps, string $outputPath, string $durationStr, string $tempDir): void
     {
         $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
 
@@ -418,17 +476,53 @@ class ImageToVideoEngine
             }
         }
 
+        if ($lastSentenceEnd > 0.0) {
+            return $lastSentenceEnd;
+        }
+
+        if ($lastWordEnd > 0.0) {
+            return $lastWordEnd;
+        }
+
+        return $maxDuration;
+    }
+
+    protected function probeDuration(string $ffmpegPath, string $filePath): float
+    {
+        $ffprobePath = str_replace('ffmpeg', 'ffprobe', $ffmpegPath);
+        $cmd = sprintf(
+            '%s -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null',
+            escapeshellarg($ffprobePath),
+            escapeshellarg($filePath)
+        );
+        $output = trim((string) shell_exec($cmd));
+        return is_numeric($output) ? (float) $output : 0.0;
+    }
+
+    protected function rescaleTimestamps(array $wordTimestamps, float $ratio): array
+    {
+        return array_map(static function (array $word) use ($ratio): array {
+            $word['start'] = round($word['start'] / $ratio, 4);
+            $word['end'] = round($word['end'] / $ratio, 4);
+            return $word;
+        }, $wordTimestamps);
+    }
+
+    protected function splitIntoChunks(string $script): array
+    {
+        $sentences = preg_split('/(?<=[.!?])\s+|\n/', trim($script), -1, PREG_SPLIT_NO_EMPTY);
         return array_values(array_filter(array_map('trim', $sentences)));
     }
 
-    protected function createClipFromImage(string $imagePath, string $outputPath, string $text = ''): void
+    protected function createClipFromImage(string $imagePath, string $outputPath, string $text, float $duration): void
     {
         $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-        $duration = $this->imageDuration;
-        $w2 = $this->width * 2;
-        $h2 = $this->height * 2;
         $fps = 25;
-        $frames = $duration * $fps;
+        $frames = (int) round($duration * $fps);
+        $frames = max(1, $frames);
+        $durationStr = number_format($duration, 4, '.', '');
+
+        $threads = max(1, (int) shell_exec('nproc 2>/dev/null') - 1 ?: 2);
 
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
             $filter = "[0:v]scale={$w2}:{$h2}:force_original_aspect_ratio=increase,crop={$w2}:{$h2},setsar=1";
@@ -446,7 +540,7 @@ class ImageToVideoEngine
 
             $filter .= ",zoompan={$effect}:d={$frames}:s={$this->width}x{$this->height}:fps={$fps}";
         } else {
-            $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
+            $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1,fps={$fps}";
         }
 
         if ($text !== '') {
@@ -462,7 +556,8 @@ class ImageToVideoEngine
         }
 
         $command = [
-            $ffmpegPath, '-y', '-loop', '1', '-i', $imagePath,
+            $ffmpegPath, '-y',
+            '-loop', '1', '-i', $imagePath,
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
             '-map', '0:v:0', '-map', '1:a:0',
@@ -470,6 +565,11 @@ class ImageToVideoEngine
             $outputPath,
         ];
 
+        $this->runProcess($command, 'Image clip creation');
+    }
+
+    protected function runProcess(array $command, string $label): void
+    {
         $process = new Process($command);
         $process->setTimeout(3600);
         $process->run();

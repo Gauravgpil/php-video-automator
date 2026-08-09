@@ -4,7 +4,6 @@ namespace PhpVideoAutomator\Services;
 
 use Exception;
 use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Log;
 
 class AiTextService
 {
@@ -14,11 +13,12 @@ class AiTextService
 
     protected Client $client;
 
-    public function __construct(string $apiKey, string $provider = 'openai')
+    public function __construct(string $apiKey, string $provider = 'openai', string $model = 'gpt-4o-mini')
     {
         $this->apiKey = $apiKey;
         $this->provider = $provider;
-        $this->client = new Client(['timeout' => 60]);
+        $this->model = $model;
+        $this->client = new Client(['timeout' => 30]);
     }
 
     public function extractStockVideoKeywords(string $prompt): string
@@ -73,12 +73,17 @@ class AiTextService
                 return $keywords;
             }
 
-            return $prompt;
+            if (!empty($content)) {
+                $keywords = trim(str_replace(["'", '"', '.', ',', "\n"], '', $content));
+                return !empty($keywords) ? $keywords : $prompt;
+            }
         } catch (Exception $e) {
             Log::error('OpenAI Text Extraction Error: '.$e->getMessage());
 
             return $prompt;
         }
+
+        return $prompt;
     }
 
     public function selectBestMediaIndex(string $scene, array $options): int
@@ -115,7 +120,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
@@ -166,7 +171,7 @@ class AiTextService
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
@@ -228,7 +233,7 @@ PROMPT;
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-4o-mini',
+                    'model' => $this->model,
                     'messages' => [
                         [
                             'role' => 'system',
