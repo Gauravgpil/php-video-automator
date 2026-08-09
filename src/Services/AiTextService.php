@@ -56,7 +56,7 @@ class AiTextService
                             'content' => $prompt,
                         ],
                     ],
-                    'max_tokens' => 20,
+                    'max_completion_tokens' => 20,
                     'temperature' => 0.3,
                 ],
             ]);
@@ -134,7 +134,7 @@ class AiTextService
                             'content' => $userPrompt,
                         ],
                     ],
-                    'max_tokens' => 10,
+                    'max_completion_tokens' => 10,
                     'temperature' => 0.1,
                 ],
             ]);
@@ -184,7 +184,7 @@ class AiTextService
                             'content' => $script,
                         ],
                     ],
-                    'max_tokens' => 150,
+                    'max_completion_tokens' => 150,
                     'temperature' => 0.3,
                 ],
             ]);
@@ -246,7 +246,7 @@ PROMPT;
                             'content' => $prompt,
                         ],
                     ],
-                    'max_tokens' => $maxTokens,
+                    'max_completion_tokens' => $maxTokens,
                     'temperature' => 0.65,
                 ],
             ]);
