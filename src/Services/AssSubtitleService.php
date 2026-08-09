@@ -174,13 +174,25 @@ class AssSubtitleService
         $ass .= "[Events]\n";
         $ass .= "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
 
-        foreach ($lines as $lineWords) {
+        foreach ($lines as $index => $lineWords) {
             if (empty($lineWords)) {
                 continue;
             }
 
             $lineStart = (float) ($lineWords[0]['start'] ?? 0);
             $lineEnd = (float) (end($lineWords)['end'] ?? $lineStart + 2.0);
+            
+            // Extend line end to match the start of the next line (or add 2s for the last line)
+            // This prevents subtitles from disappearing too early before the video cuts.
+            if (isset($lines[$index + 1]) && ! empty($lines[$index + 1])) {
+                $nextLineStart = (float) ($lines[$index + 1][0]['start'] ?? $lineEnd);
+                if ($nextLineStart > $lineEnd) {
+                    $lineEnd = $nextLineStart;
+                }
+            } else {
+                $lineEnd += 2.0;
+            }
+
             $karaokeText = '';
 
             foreach ($lineWords as $w) {
