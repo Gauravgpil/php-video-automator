@@ -4,6 +4,4 @@ namespace PhpVideoAutomator\Exceptions;
 
 use Exception;
 
-class VideoAutomatorException extends Exception
-{
-}
+class VideoAutomatorException extends Exception {}

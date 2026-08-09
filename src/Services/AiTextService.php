@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Log;
 class AiTextService
 {
     protected string $apiKey;
+
     protected string $provider;
+
     protected Client $client;
 
     public function __construct(string $apiKey, string $provider = 'openai')
@@ -24,7 +26,7 @@ class AiTextService
         if ($this->provider === 'openai') {
             return $this->extractWithOpenAi($prompt);
         }
-        
+
         return $prompt;
     }
 
@@ -37,42 +39,44 @@ class AiTextService
         try {
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
-                    'model' => 'gpt-3.5-turbo',
+                    'model' => 'gpt-4o-mini',
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => "Extract 1 to 2 highly visual, concrete, noun-based search terms representing the scene for a stock video search. Only output the keywords. Do not include abstract concepts, punctuation, or conversational text. Output example: 'sunny beach', 'businessman typing'."
+                            'content' => "Extract 1 to 2 highly visual, concrete, noun-based search terms representing the scene for a stock video search. Only output the keywords. Do not include abstract concepts, punctuation, or conversational text. Output example: 'sunny beach', 'businessman typing'.",
                         ],
                         [
                             'role' => 'user',
-                            'content' => $prompt
-                        ]
+                            'content' => $prompt,
+                        ],
                     ],
                     'max_tokens' => 20,
-                    'temperature' => 0.3
-                ]
+                    'temperature' => 0.3,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
             $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
+
+            if (! empty($content)) {
                 $keywords = trim($content);
                 $keywords = str_replace(["'", '"', '.', ',', "\n"], '', $keywords);
-                
+
                 if (empty($keywords)) {
                     return $prompt;
                 }
+
                 return $keywords;
             }
 
             return $prompt;
         } catch (Exception $e) {
-            Log::error('OpenAI Text Extraction Error: ' . $e->getMessage());
+            Log::error('OpenAI Text Extraction Error: '.$e->getMessage());
+
             return $prompt;
         }
     }
@@ -96,7 +100,7 @@ class AiTextService
             return 0;
         }
 
-        $optionsText = "";
+        $optionsText = '';
         foreach ($options as $index => $tags) {
             $optionsText .= "Option {$index}: {$tags}\n";
         }
@@ -107,7 +111,7 @@ class AiTextService
         try {
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
@@ -115,33 +119,33 @@ class AiTextService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => $systemPrompt
+                            'content' => $systemPrompt,
                         ],
                         [
                             'role' => 'user',
-                            'content' => $userPrompt
-                        ]
+                            'content' => $userPrompt,
+                        ],
                     ],
                     'max_tokens' => 10,
-                    'temperature' => 0.1
-                ]
+                    'temperature' => 0.1,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
             $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
+
+            if (! empty($content)) {
                 $content = trim($content);
                 // Extract the first number from the output in case AI adds extra text
                 if (preg_match('/\d+/', $content, $matches)) {
-                    $idx = (int)$matches[0];
+                    $idx = (int) $matches[0];
                     if (isset($options[$idx])) {
                         return $idx;
                     }
                 }
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Selection Error: ' . $e->getMessage());
+            Log::warning('OpenAI AI Selection Error: '.$e->getMessage());
         }
 
         return 0;
@@ -155,10 +159,10 @@ class AiTextService
 
         try {
             $systemPrompt = "You are a professional video director. The user will provide a long, unpunctuated or comma-heavy video prompt. Your task is to rewrite it into EXACTLY {$targetCount} distinct, highly visual sentences separated by periods. Focus on breaking the visual elements logically into scenes. Do not add conversational filler. Output ONLY the rewritten sentences.";
-            
+
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
@@ -166,26 +170,26 @@ class AiTextService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => $systemPrompt
+                            'content' => $systemPrompt,
                         ],
                         [
                             'role' => 'user',
-                            'content' => $script
-                        ]
+                            'content' => $script,
+                        ],
                     ],
                     'max_tokens' => 150,
-                    'temperature' => 0.3
-                ]
+                    'temperature' => 0.3,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
             $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
+
+            if (! empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Formatting Error: ' . $e->getMessage());
+            Log::warning('OpenAI AI Formatting Error: '.$e->getMessage());
         }
 
         return $script;
@@ -198,14 +202,29 @@ class AiTextService
         }
 
         try {
-            $wordCount = (int)($duration * 2.1);
-            $sentenceCount = max(2, (int)($duration / 6));
-            
-            $systemPrompt = "You are a professional video scriptwriter. The user will provide a motion brief or description of a video. Your task is to write an engaging, highly emotional, and genuinely human voiceover script. Use conversational phrasing, a natural flow, and include dramatic pauses (represented by ellipses '...' or em-dashes '—'). Avoid sounding like an AI, a generic corporate announcer, or a news reader.\nIMPORTANT: The video is exactly {$duration} seconds long. You MUST write EXACTLY {$wordCount} words. If you write less than {$wordCount} words, there will be dead silence at the end of the video. Count your words and ensure the script is extremely close to {$wordCount} words. Split into roughly {$sentenceCount} distinct sentences. Do not include any visual directions, just the spoken text.";
-            
+            $wordCount = max(10, (int) round($duration * 2.3));
+            $maxTokens = max(200, (int) ($wordCount * 1.8));
+            $sentenceCount = max(2, (int) ceil($duration / 5));
+
+            $systemPrompt = <<<PROMPT
+You are an award-winning video scriptwriter specializing in cinematic, emotionally resonant voiceovers.
+
+Your task is to write a professional voiceover script for a {$duration}-second video based on the concept provided by the user.
+
+RULES (follow all of them strictly):
+1. WORD COUNT: Write EXACTLY {$wordCount} words. Count carefully. Not fewer. Not more.
+2. DURATION FIT: The script must fill the full {$duration} seconds when spoken aloud at a natural, unhurried pace (~2.3 words/second).
+3. SENTENCE STRUCTURE: Break the script into approximately {$sentenceCount} distinct, punchy sentences. Use short, powerful clauses for impact.
+4. TONE: Write like a human. Use conversational rhythm, vivid imagery, and emotional beats. Never sound robotic or corporate.
+5. NATURAL PAUSES: Use ellipses "..." or em-dashes "—" to indicate dramatic pauses. These help the TTS engine breathe naturally.
+6. NO STAGE DIRECTIONS: Output ONLY the spoken words. No scene descriptions, timestamps, or speaker labels.
+7. COMPLETENESS: The script must end at a complete sentence or clause. Never end mid-sentence or mid-thought.
+8. SPECIFICITY: Reference the visual concept clearly. The audience should be able to picture the scene as they listen.
+PROMPT;
+
             $response = $this->client->post('https://api.openai.com/v1/chat/completions', [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
@@ -213,26 +232,26 @@ class AiTextService
                     'messages' => [
                         [
                             'role' => 'system',
-                            'content' => $systemPrompt
+                            'content' => $systemPrompt,
                         ],
                         [
                             'role' => 'user',
-                            'content' => $prompt
-                        ]
+                            'content' => $prompt,
+                        ],
                     ],
-                    'max_tokens' => max(150, (int)($wordCount * 1.5)),
-                    'temperature' => 0.7
-                ]
+                    'max_tokens' => $maxTokens,
+                    'temperature' => 0.65,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
             $content = data_get($data, 'choices.0.message.content');
-            
-            if (!empty($content)) {
+
+            if (! empty($content)) {
                 return trim($content);
             }
         } catch (Exception $e) {
-            Log::warning('OpenAI AI Voiceover Script Error: ' . $e->getMessage());
+            Log::warning('OpenAI AI Voiceover Script Error: '.$e->getMessage());
         }
 
         return $prompt;

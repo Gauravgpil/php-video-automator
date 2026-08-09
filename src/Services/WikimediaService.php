@@ -15,7 +15,7 @@ class WikimediaService
         $this->client = new Client([
             'base_uri' => 'https://commons.wikimedia.org/w/api.php',
             'headers' => [
-                'User-Agent' => 'PhpVideoAutomator/1.0'
+                'User-Agent' => 'PhpVideoAutomator/1.0',
             ],
             'timeout' => 30,
         ]);
@@ -28,11 +28,11 @@ class WikimediaService
                 'query' => [
                     'action' => 'query',
                     'list' => 'search',
-                    'srsearch' => $query . ' filetype:video',
+                    'srsearch' => $query.' filetype:video',
                     'srlimit' => $limit,
                     'utf8' => '1',
-                    'format' => 'json'
-                ]
+                    'format' => 'json',
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -51,8 +51,8 @@ class WikimediaService
                     'titles' => $titlesStr,
                     'prop' => 'videoinfo',
                     'viprop' => 'url',
-                    'format' => 'json'
-                ]
+                    'format' => 'json',
+                ],
             ]);
 
             $infoData = json_decode($infoResponse->getBody()->getContents(), true);
@@ -66,8 +66,8 @@ class WikimediaService
             }
 
             return $results;
-        } catch (\Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch videos from Wikimedia Commons: " . $e->getMessage());
+        } catch (Exception $e) {
+            throw new VideoAutomatorException('Failed to fetch videos from Wikimedia Commons: '.$e->getMessage());
         }
     }
 
@@ -78,11 +78,11 @@ class WikimediaService
                 'query' => [
                     'action' => 'query',
                     'list' => 'search',
-                    'srsearch' => $query . ' filetype:bitmap',
+                    'srsearch' => $query.' filetype:bitmap',
                     'srlimit' => $limit,
                     'utf8' => '1',
-                    'format' => 'json'
-                ]
+                    'format' => 'json',
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -101,8 +101,8 @@ class WikimediaService
                     'titles' => $titlesStr,
                     'prop' => 'imageinfo',
                     'iiprop' => 'url',
-                    'format' => 'json'
-                ]
+                    'format' => 'json',
+                ],
             ]);
 
             $infoData = json_decode($infoResponse->getBody()->getContents(), true);
@@ -117,7 +117,7 @@ class WikimediaService
 
             return $results;
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch images from Wikimedia Commons: " . $e->getMessage());
+            throw new VideoAutomatorException('Failed to fetch images from Wikimedia Commons: '.$e->getMessage());
         }
     }
 }

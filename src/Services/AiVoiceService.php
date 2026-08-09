@@ -3,8 +3,8 @@
 namespace PhpVideoAutomator\Services;
 
 use GuzzleHttp\Client;
-use RuntimeException;
 use InvalidArgumentException;
+use RuntimeException;
 use Throwable;
 
 class AiVoiceService
@@ -20,31 +20,31 @@ class AiVoiceService
     {
         return match ($provider) {
             'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $voiceId, $speed),
-            'lmnt'   => $this->generateLmnt($text, $model, $apiKey, $outputFile, $voiceId, $speed),
+            'lmnt' => $this->generateLmnt($text, $model, $apiKey, $outputFile, $voiceId, $speed),
             'openai' => $this->generateOpenAI($text, $model, $apiKey, $outputFile, $voiceId, $speed),
-            default  => throw new InvalidArgumentException("Unsupported voice provider: {$provider}"),
+            default => throw new InvalidArgumentException("Unsupported voice provider: {$provider}"),
         };
     }
 
     protected function generateElevenLabs(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
-        $voiceId  = !empty($voiceId) ? $voiceId : '21m00Tcm4TlvDq8ikWAM';
+        $voiceId = ! empty($voiceId) ? $voiceId : '21m00Tcm4TlvDq8ikWAM';
         $response = $this->client->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}/with-timestamps", [
             'headers' => [
-                'xi-api-key'   => $apiKey,
+                'xi-api-key' => $apiKey,
                 'Content-Type' => 'application/json',
             ],
             'json' => [
-                'text'           => $text,
-                'model_id'       => $model ?: 'eleven_multilingual_v2',
+                'text' => $text,
+                'model_id' => $model ?: 'eleven_multilingual_v2',
                 'voice_settings' => [
-                    'stability'        => 0.5,
+                    'stability' => 0.5,
                     'similarity_boost' => 0.75,
                 ],
             ],
         ]);
 
-        $data        = json_decode((string) $response->getBody(), true);
+        $data = json_decode((string) $response->getBody(), true);
         $audioBase64 = $data['audio_base64'] ?? '';
 
         if (empty($audioBase64)) {
@@ -56,9 +56,9 @@ class AiVoiceService
         $alignment = $data['alignment'] ?? [];
 
         return $this->buildWordsFromCharacters(
-            $alignment['characters']                    ?? [],
+            $alignment['characters'] ?? [],
             $alignment['character_start_times_seconds'] ?? [],
-            $alignment['character_end_times_seconds']   ?? []
+            $alignment['character_end_times_seconds'] ?? []
         );
     }
 
@@ -66,19 +66,19 @@ class AiVoiceService
     {
         $response = $this->client->post('https://api.lmnt.com/v1/ai/speech', [
             'headers' => [
-                'X-API-Key'    => $apiKey,
+                'X-API-Key' => $apiKey,
                 'Content-Type' => 'application/json',
             ],
             'json' => [
-                'text'             => $text,
-                'voice'            => !empty($voiceId) ? $voiceId : ($model ?: 'leah'),
-                'format'           => 'mp3',
+                'text' => $text,
+                'voice' => ! empty($voiceId) ? $voiceId : ($model ?: 'leah'),
+                'format' => 'mp3',
                 'return_durations' => true,
-                'speed'            => $speed > 0 ? $speed : 1.0,
+                'speed' => $speed > 0 ? $speed : 1.0,
             ],
         ]);
 
-        $data        = json_decode((string) $response->getBody(), true);
+        $data = json_decode((string) $response->getBody(), true);
         $audioBase64 = $data['audio'] ?? '';
 
         if (empty($audioBase64)) {
@@ -89,8 +89,8 @@ class AiVoiceService
 
         $durations = $data['durations'] ?? [];
 
-        if (!empty($durations)) {
-            $words  = [];
+        if (! empty($durations)) {
+            $words = [];
             $cursor = 0.0;
 
             foreach ($durations as $entry) {
@@ -100,18 +100,18 @@ class AiVoiceService
                     continue;
                 }
 
-                $start   = isset($entry['start']) ? (float) $entry['start'] : $cursor;
-                $dur     = (float) ($entry['duration'] ?? 0.3);
-                $end     = $start + $dur;
+                $start = isset($entry['start']) ? (float) $entry['start'] : $cursor;
+                $dur = (float) ($entry['duration'] ?? 0.3);
+                $end = $start + $dur;
                 $words[] = [
-                    'word'  => $wordText,
+                    'word' => $wordText,
                     'start' => round($start, 4),
-                    'end'   => round($end, 4),
+                    'end' => round($end, 4),
                 ];
-                $cursor  = $end;
+                $cursor = $end;
             }
 
-            if (!empty($words)) {
+            if (! empty($words)) {
                 return $words;
             }
         }
@@ -122,12 +122,12 @@ class AiVoiceService
     protected function generateOpenAI(string $text, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
         $payload = [
-            'model'           => $model ?: 'tts-1',
-            'input'           => $text,
-            'voice'           => !empty($voiceId) ? $voiceId : 'alloy',
+            'model' => $model ?: 'tts-1',
+            'input' => $text,
+            'voice' => ! empty($voiceId) ? $voiceId : 'alloy',
             'response_format' => 'mp3',
         ];
-        
+
         if ($speed != 1.0 && $speed > 0) {
             $payload['speed'] = $speed;
         }
@@ -135,7 +135,7 @@ class AiVoiceService
         $response = $this->client->post('https://api.openai.com/v1/audio/speech', [
             'headers' => [
                 'Authorization' => "Bearer {$apiKey}",
-                'Content-Type'  => 'application/json',
+                'Content-Type' => 'application/json',
             ],
             'json' => $payload,
         ]);
@@ -147,20 +147,21 @@ class AiVoiceService
 
     protected function buildWordsFromCharacters(array $chars, array $starts, array $ends): array
     {
-        $words        = [];
-        $currentWord  = '';
+        $words = [];
+        $currentWord = '';
         $currentStart = null;
-        $currentEnd   = null;
+        $currentEnd = null;
 
         for ($i = 0; $i < count($chars); $i++) {
             $char = $chars[$i];
 
             if (trim((string) $char) === '') {
                 if ($currentWord !== '') {
-                    $words[]      = ['word' => $currentWord, 'start' => $currentStart, 'end' => $currentEnd];
-                    $currentWord  = '';
+                    $words[] = ['word' => $currentWord, 'start' => $currentStart, 'end' => $currentEnd];
+                    $currentWord = '';
                     $currentStart = null;
                 }
+
                 continue;
             }
 
@@ -169,7 +170,7 @@ class AiVoiceService
             }
 
             $currentWord .= $char;
-            $currentEnd   = $ends[$i] ?? 0;
+            $currentEnd = $ends[$i] ?? 0;
         }
 
         if ($currentWord !== '') {
@@ -185,7 +186,7 @@ class AiVoiceService
 
         try {
             if (file_exists($mp3File)) {
-                $cmd    = sprintf(
+                $cmd = sprintf(
                     'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null',
                     escapeshellarg($mp3File)
                 );
@@ -198,17 +199,17 @@ class AiVoiceService
             $totalDuration = 5.0;
         }
 
-        $textWords       = array_values(array_filter(preg_split('/\s+/', trim($text))));
-        $wordCount       = count($textWords);
+        $textWords = array_values(array_filter(preg_split('/\s+/', trim($text))));
+        $wordCount = count($textWords);
         $durationPerWord = $wordCount > 0 ? $totalDuration / $wordCount : 0.43;
-        $words           = [];
-        $current         = 0.0;
+        $words = [];
+        $current = 0.0;
 
         foreach ($textWords as $word) {
             $words[] = [
-                'word'  => $word,
+                'word' => $word,
                 'start' => round($current, 4),
-                'end'   => round($current + $durationPerWord, 4),
+                'end' => round($current + $durationPerWord, 4),
             ];
             $current += $durationPerWord;
         }

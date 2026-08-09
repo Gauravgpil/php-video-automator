@@ -10,7 +10,9 @@ use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 class AiImageService
 {
     protected string $apiKey;
+
     protected string $provider;
+
     protected Client $client;
 
     public function __construct(string $apiKey, string $provider = 'openai')
@@ -25,35 +27,35 @@ class AiImageService
         if ($this->provider === 'openai') {
             return $this->generateWithOpenAi($prompt, $size);
         }
-        
+
         throw new VideoAutomatorException("Unsupported AI image provider: {$this->provider}");
     }
 
     protected function generateWithOpenAi(string $prompt, string $size): string
     {
         if (empty($this->apiKey)) {
-            return 'https://via.placeholder.com/' . $size . '.png?text=' . urlencode(substr($prompt, 0, 50));
+            return 'https://via.placeholder.com/'.$size.'.png?text='.urlencode(substr($prompt, 0, 50));
         }
 
         try {
             $response = $this->client->post('https://api.openai.com/v1/images/generations', [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->apiKey,
+                    'Authorization' => 'Bearer '.$this->apiKey,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => [
                     'model' => 'gpt-image-2',
                     'prompt' => $prompt,
                     'n' => 1,
-                    'size' => $size
-                ]
+                    'size' => $size,
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            
+
             $imageUrl = $this->parseImageResponse($data);
             if (empty($imageUrl)) {
-                Log::warning('OpenAI API returned unrecognized format. Response: ' . json_encode($data));
+                Log::warning('OpenAI API returned unrecognized format. Response: '.json_encode($data));
             }
 
             return $imageUrl;
@@ -61,50 +63,52 @@ class AiImageService
             $error = $e->getMessage();
 
             if (strpos($error, 'safety system') !== false) {
-                throw new VideoAutomatorException("Render failed. Your prompt was rejected by the AI safety system. Please revise your text to remove any sensitive or restricted content.");
+                throw new VideoAutomatorException('Render failed. Your prompt was rejected by the AI safety system. Please revise your text to remove any sensitive or restricted content.');
             }
 
             if (strpos($error, 'billing') !== false || strpos($error, 'quota') !== false) {
-                throw new VideoAutomatorException("Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.");
+                throw new VideoAutomatorException('Render failed. Your OpenAI API account has exceeded its quota or has billing issues. Please check your OpenAI account.');
             }
 
-            Log::error('OpenAI Image Gen Error: ' . $error);
+            Log::error('OpenAI Image Gen Error: '.$error);
 
             if (strpos($error, 'does not exist') !== false || strpos($error, 'model') !== false) {
                 try {
                     $response = $this->client->post('https://api.openai.com/v1/images/generations', [
                         'headers' => [
-                            'Authorization' => 'Bearer ' . $this->apiKey,
+                            'Authorization' => 'Bearer '.$this->apiKey,
                             'Content-Type' => 'application/json',
                         ],
                         'json' => [
                             'model' => 'gpt-image-2',
                             'prompt' => $prompt,
                             'n' => 1,
-                            'size' => $size
-                        ]
+                            'size' => $size,
+                        ],
                     ]);
 
                     $data = json_decode($response->getBody()->getContents(), true);
+
                     return $this->parseImageResponse($data);
                 } catch (Exception $fallbackException) {
-                    throw new VideoAutomatorException("Render failed. Your API account lacks permission for image generation. Please upgrade your API plan or check your billing.");
+                    throw new VideoAutomatorException('Render failed. Your API account lacks permission for image generation. Please upgrade your API plan or check your billing.');
                 }
             }
-            
-            throw new VideoAutomatorException("Render failed. The AI engine encountered an error while processing your prompt.");
+
+            throw new VideoAutomatorException('Render failed. The AI engine encountered an error while processing your prompt.');
         }
     }
 
     protected function parseImageResponse(array $data): string
     {
-        if (!empty($data['data'][0]['url'])) {
+        if (! empty($data['data'][0]['url'])) {
             return $data['data'][0]['url'];
         }
 
-        if (!empty($data['data'][0]['b64_json'])) {
-            $tempFile = sys_get_temp_dir() . '/' . uniqid('ai_img_') . '.png';
+        if (! empty($data['data'][0]['b64_json'])) {
+            $tempFile = sys_get_temp_dir().'/'.uniqid('ai_img_').'.png';
             file_put_contents($tempFile, base64_decode($data['data'][0]['b64_json']));
+
             return $tempFile;
         }
 

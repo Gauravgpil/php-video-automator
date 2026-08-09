@@ -5,13 +5,16 @@ namespace PhpVideoAutomator\Traits;
 trait HandlesCaptions
 {
     protected bool $addCaptions = false;
+
     protected array $captionStyleOptions = [];
+
     protected array $voiceOptions = [];
 
     public function withCaptions(bool $enable = true, array $styleOptions = []): self
     {
         $this->addCaptions = $enable;
         $this->captionStyleOptions = $styleOptions;
+
         return $this;
     }
 
@@ -24,33 +27,34 @@ trait HandlesCaptions
             'voiceId' => $voiceId,
             'speed' => $speed,
         ];
+
         return $this;
     }
 
     protected function getCaptionWordwrapLimit(int $width): int
     {
         $preset = $this->captionStyleOptions['preset'] ?? 'classic';
-        
+
         $presets = [
             'classic' => 36,
             'modern_middle' => 54,
             'elegant_bottom' => 45,
             'bold_top' => 60,
-            'cinematic' => 40
+            'cinematic' => 40,
         ];
-        
+
         $fontsize = $this->captionStyleOptions['fontsize'] ?? ($presets[$preset] ?? 36);
-        $fontsize = (int)$fontsize > 0 ? (int)$fontsize : 36;
-        
+        $fontsize = (int) $fontsize > 0 ? (int) $fontsize : 36;
+
         $limit = floor(($width * 0.9) / ($fontsize * 0.55));
-        
-        return max(15, (int)$limit);
+
+        return max(15, (int) $limit);
     }
 
     protected function getCaptionFilter(string $safeTxtPath, int $width, int $height): string
     {
         $preset = $this->captionStyleOptions['preset'] ?? 'classic';
-        
+
         // Define preset templates
         $presets = [
             'classic' => [
@@ -117,7 +121,7 @@ trait HandlesCaptions
                 'shadowcolor' => 'black@0.9',
                 'shadowx' => 3,
                 'shadowy' => 3,
-            ]
+            ],
         ];
 
         // Merge defaults, preset, and custom overrides
@@ -133,10 +137,10 @@ trait HandlesCaptions
         $box = $style['box'] ?? 1;
         $boxcolor = $style['boxcolor'] ?? 'black@0.45';
         $boxborderw = $style['boxborderw'] ?? 24;
-        
+
         $x = $style['x'] ?? '(w-text_w)/2';
         $y = $style['y'] ?? 'h-text_h-180';
-        
+
         // Alignment overriding Y
         if (isset($this->captionStyleOptions['alignment'])) {
             $alignment = (int) $this->captionStyleOptions['alignment'];
@@ -148,7 +152,7 @@ trait HandlesCaptions
                 $y = 'h-text_h-180';
             }
         }
-        
+
         $line_spacing = $style['line_spacing'] ?? 12;
         $shadowcolor = $style['shadowcolor'] ?? '';
         $shadowx = $style['shadowx'] ?? 0;
@@ -162,14 +166,14 @@ trait HandlesCaptions
             "y={$y}",
             "line_spacing={$line_spacing}",
         ];
-        
-        if (!empty($style['fontname'])) {
+
+        if (! empty($style['fontname'])) {
             $fontNameStr = str_replace(['\\', ':', "'"], ['/', '\\:', "\\'"], $style['fontname']);
             $filterParams[] = "font='{$fontNameStr}'";
         }
 
         if ($box) {
-            $filterParams[] = "box=1";
+            $filterParams[] = 'box=1';
             $filterParams[] = "boxcolor={$boxcolor}";
             $filterParams[] = "boxborderw={$boxborderw}";
         }
@@ -182,6 +186,6 @@ trait HandlesCaptions
 
         $filterParams = array_filter($filterParams);
 
-        return "drawtext=" . implode(':', $filterParams);
+        return 'drawtext='.implode(':', $filterParams);
     }
 }

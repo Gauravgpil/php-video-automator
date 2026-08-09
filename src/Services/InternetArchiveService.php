@@ -14,7 +14,7 @@ class InternetArchiveService
     {
         $this->client = new Client([
             'base_uri' => 'https://archive.org/',
-            'timeout'  => 30,
+            'timeout' => 30,
         ]);
     }
 
@@ -23,12 +23,12 @@ class InternetArchiveService
         try {
             $response = $this->client->get('advancedsearch.php', [
                 'query' => [
-                    'q' => $query . ' AND mediatype:movies AND format:"h.264"',
+                    'q' => $query.' AND mediatype:movies AND format:"h.264"',
                     'fl[]' => 'identifier',
                     'rows' => $limit,
                     'page' => 1,
-                    'output' => 'json'
-                ]
+                    'output' => 'json',
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -37,7 +37,7 @@ class InternetArchiveService
             $results = [];
             foreach ($docs as $doc) {
                 $identifier = $doc['identifier'];
-                
+
                 $metaResponse = $this->client->get("metadata/{$identifier}");
                 $metaData = json_decode($metaResponse->getBody()->getContents(), true);
 
@@ -45,48 +45,7 @@ class InternetArchiveService
                 foreach ($files as $file) {
                     if (str_ends_with(strtolower($file['name'] ?? ''), '.mp4')) {
                         $results[] = [
-                            'url' => "https://archive.org/download/{$identifier}/" . $file['name']
-                        ];
-                        break;
-                    }
-                }
-            }
-
-            return $results;
-        } catch (\Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch videos from Internet Archive: " . $e->getMessage());
-        }
-    }
-
-    public function searchImages(string $query, int $limit = 10): array
-    {
-        try {
-            $response = $this->client->get('advancedsearch.php', [
-                'query' => [
-                    'q' => $query . ' AND mediatype:image',
-                    'fl[]' => 'identifier',
-                    'rows' => $limit,
-                    'page' => 1,
-                    'output' => 'json'
-                ]
-            ]);
-
-            $data = json_decode($response->getBody()->getContents(), true);
-            $docs = $data['response']['docs'] ?? [];
-
-            $results = [];
-            foreach ($docs as $doc) {
-                $identifier = $doc['identifier'];
-                
-                $metaResponse = $this->client->get("metadata/{$identifier}");
-                $metaData = json_decode($metaResponse->getBody()->getContents(), true);
-
-                $files = $metaData['files'] ?? [];
-                foreach ($files as $file) {
-                    $name = strtolower($file['name'] ?? '');
-                    if (str_ends_with($name, '.jpg') || str_ends_with($name, '.jpeg') || str_ends_with($name, '.png')) {
-                        $results[] = [
-                            'url' => "https://archive.org/download/{$identifier}/" . $file['name']
+                            'url' => "https://archive.org/download/{$identifier}/".$file['name'],
                         ];
                         break;
                     }
@@ -95,7 +54,48 @@ class InternetArchiveService
 
             return $results;
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch images from Internet Archive: " . $e->getMessage());
+            throw new VideoAutomatorException('Failed to fetch videos from Internet Archive: '.$e->getMessage());
+        }
+    }
+
+    public function searchImages(string $query, int $limit = 10): array
+    {
+        try {
+            $response = $this->client->get('advancedsearch.php', [
+                'query' => [
+                    'q' => $query.' AND mediatype:image',
+                    'fl[]' => 'identifier',
+                    'rows' => $limit,
+                    'page' => 1,
+                    'output' => 'json',
+                ],
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+            $docs = $data['response']['docs'] ?? [];
+
+            $results = [];
+            foreach ($docs as $doc) {
+                $identifier = $doc['identifier'];
+
+                $metaResponse = $this->client->get("metadata/{$identifier}");
+                $metaData = json_decode($metaResponse->getBody()->getContents(), true);
+
+                $files = $metaData['files'] ?? [];
+                foreach ($files as $file) {
+                    $name = strtolower($file['name'] ?? '');
+                    if (str_ends_with($name, '.jpg') || str_ends_with($name, '.jpeg') || str_ends_with($name, '.png')) {
+                        $results[] = [
+                            'url' => "https://archive.org/download/{$identifier}/".$file['name'],
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            return $results;
+        } catch (Exception $e) {
+            throw new VideoAutomatorException('Failed to fetch images from Internet Archive: '.$e->getMessage());
         }
     }
 }

@@ -6,29 +6,38 @@ use Exception;
 use Illuminate\Support\Facades\Log;
 use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 use PhpVideoAutomator\Services\AiImageService;
+use PhpVideoAutomator\Services\AiTextService;
+use PhpVideoAutomator\Services\AiVoiceService;
+use PhpVideoAutomator\Services\AssSubtitleService;
 use PhpVideoAutomator\Services\InternetArchiveService;
 use PhpVideoAutomator\Services\PexelsService;
 use PhpVideoAutomator\Services\PixabayService;
 use PhpVideoAutomator\Services\WikimediaService;
-use PhpVideoAutomator\Services\AiTextService;
-use PhpVideoAutomator\Services\AiVoiceService;
-use PhpVideoAutomator\Services\AssSubtitleService;
-use Symfony\Component\Process\Process;
 use PhpVideoAutomator\Traits\HandlesCaptions;
+use Symfony\Component\Process\Process;
 
 class ImageToVideoEngine
 {
     use HandlesCaptions;
 
     protected array $config;
+
     protected string $script = '';
+
     protected array $chunks = [];
+
     protected array $captionChunks = [];
+
     protected array $images = [];
+
     protected string $animation = 'none';
+
     protected ?string $audioPath = null;
+
     protected int $width = 1080;
+
     protected int $height = 1920;
+
     protected int $imageDuration = 4;
 
     public function __construct(array $config)
@@ -40,32 +49,49 @@ class ImageToVideoEngine
     {
         $this->script = $script;
         $this->chunks = $this->splitIntoChunks($script);
-        
+
         return $this;
     }
 
     public function setCaptions(string $captions): self
     {
         $this->captionChunks = $this->splitIntoChunks($captions);
+
         return $this;
     }
 
     public function generateImages(string $apiKey = '', string $provider = 'openai'): self
     {
         $apiKey = $apiKey ?: ($this->config['ai_image_api_key'] ?? '');
-        
+
         if (empty($apiKey)) {
             return $this->fetchStockImages();
         }
 
         $service = new AiImageService($apiKey, $provider);
 
-        $size = '1024x1024';
-        if ($this->width < $this->height) $size = '1024x1536';
-        if ($this->width > $this->height) $size = '1536x1024';
+        $w = round($this->width / 16) * 16;
+        $h = round($this->height / 16) * 16;
+
+        $w = max(256, min(3840, $w));
+        $h = max(256, min(3840, $h));
+
+        $size = "{$w}x{$h}";
 
         foreach ($this->chunks as $index => $chunk) {
-            $prompt = "Create a high-quality, detailed image exactly matching this description: '" . trim($chunk) . "'. Adhere to any specific art style or medium requested. If none is specified, default to a photorealistic cinematic style.";
+            $aspectHint = $this->width < $this->height
+                ? 'portrait/vertical frame (9:16 aspect ratio)'
+                : ($this->width > $this->height ? 'landscape/cinematic frame (16:9 aspect ratio)' : 'square frame (1:1 aspect ratio)');
+
+            $prompt = implode(' ', [
+                "Photorealistic cinematic still, {$aspectHint}.",
+                'Scene: '.trim($chunk).'.',
+                'Ultra-sharp focus, professional color grading, dramatic natural lighting (golden hour or blue hour unless otherwise specified).',
+                'Shot on high-end cinema camera (ARRI, RED), shallow depth of field, film grain texture.',
+                'No text, no watermarks, no logos, no borders, no frame artifacts.',
+                'Composition: rule of thirds, visually striking foreground-to-background depth.',
+                'Output must be a single, cohesive, full-bleed image perfectly matching the described scene.',
+            ]);
             $this->images[$index] = $service->generateImage($prompt, $size);
         }
 
@@ -75,7 +101,7 @@ class ImageToVideoEngine
     public function fetchStockImages(string $provider = 'auto', string $apiKey = ''): self
     {
         $aiKey = $this->config['ai_image_api_key'] ?? '';
-        $textService = !empty($aiKey) ? new AiTextService($aiKey) : null;
+        $textService = ! empty($aiKey) ? new AiTextService($aiKey) : null;
 
         $providersToTry = $provider === 'auto' ? ['pixabay', 'pexels', 'wikimedia', 'archive'] : [$provider];
         $usedUrls = [];
@@ -85,17 +111,17 @@ class ImageToVideoEngine
             if ($textService) {
                 try {
                     $query = $textService->extractStockVideoKeywords($chunk);
-                } catch (\Exception $e) {
-                    Log::warning("AI Keyword Extraction failed for chunk {$index}: " . $e->getMessage());
+                } catch (Exception $e) {
+                    Log::warning("AI Keyword Extraction failed for chunk {$index}: ".$e->getMessage());
                 }
             }
 
             if (strlen($query) > 100) {
                 $query = substr($query, 0, 100);
             }
-            
+
             $imageUrl = null;
-            
+
             foreach ($providersToTry as $p) {
                 $imageUrl = $this->searchProviderForImage($p, $query, true, $textService, $chunk, $usedUrls);
                 if ($imageUrl) {
@@ -103,16 +129,18 @@ class ImageToVideoEngine
                 }
             }
 
-            if (!$imageUrl) {
-                $fallbackQuery = "scenery background abstract";
+            if (! $imageUrl) {
+                $fallbackQuery = 'scenery background abstract';
                 foreach ($providersToTry as $p) {
                     $imageUrl = $this->searchProviderForImage($p, $fallbackQuery, false, null, '', $usedUrls);
-                    if ($imageUrl) break;
+                    if ($imageUrl) {
+                        break;
+                    }
                 }
             }
 
-            if (!$imageUrl) {
-                throw new VideoAutomatorException("Could not fetch any stock image for the prompt.");
+            if (! $imageUrl) {
+                throw new VideoAutomatorException('Could not fetch any stock image for the prompt.');
             }
 
             $this->images[$index] = $imageUrl;
@@ -138,14 +166,14 @@ class ImageToVideoEngine
                 $service = new PexelsService($key);
                 $results = $service->searchImages($query, 10);
             } elseif ($provider === 'wikimedia') {
-                $service = new WikimediaService();
+                $service = new WikimediaService;
                 $results = $service->searchImages($query, 10);
             } elseif ($provider === 'archive') {
-                $service = new InternetArchiveService();
+                $service = new InternetArchiveService;
                 $results = $service->searchImages($query, 10);
             }
 
-            if (!empty($results)) {
+            if (! empty($results)) {
                 $validItems = [];
                 foreach ($results as $item) {
                     $url = null;
@@ -156,20 +184,20 @@ class ImageToVideoEngine
                     } elseif ($provider === 'wikimedia' || $provider === 'archive') {
                         $url = $item['url'] ?? null;
                     }
-                    if ($url && !in_array($url, $usedUrls)) {
+                    if ($url && ! in_array($url, $usedUrls)) {
                         $item['_final_url'] = $url;
                         $validItems[] = $item;
                     }
                 }
-                
+
                 if (empty($validItems)) {
                     return null;
                 }
-                
+
                 $results = $validItems;
 
                 $selectedIndex = 0;
-                if ($textService && !empty($scene)) {
+                if ($textService && ! empty($scene)) {
                     $options = [];
                     foreach (array_slice($results, 0, 10) as $i => $item) {
                         $desc = '';
@@ -185,7 +213,7 @@ class ImageToVideoEngine
                     }
                     try {
                         $selectedIndex = $textService->selectBestMediaIndex($scene, $options);
-                    } catch (\Exception $e) {
+                    } catch (Exception $e) {
                         $selectedIndex = 0;
                     }
                 } elseif ($randomize) {
@@ -193,10 +221,11 @@ class ImageToVideoEngine
                 }
 
                 $result = $results[$selectedIndex] ?? $results[0];
+
                 return $result['_final_url'] ?? null;
             }
         } catch (Exception $e) {
-            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: " . $e->getMessage());
+            Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
         }
 
         return null;
@@ -205,12 +234,14 @@ class ImageToVideoEngine
     public function addAnimation(string $type = 'zoompan'): self
     {
         $this->animation = $type;
+
         return $this;
     }
 
     public function withAudio(string $audioPath): self
     {
         $this->audioPath = $audioPath;
+
         return $this;
     }
 
@@ -218,48 +249,50 @@ class ImageToVideoEngine
     {
         $this->width = $width;
         $this->height = $height;
+
         return $this;
     }
 
     public function setImageDuration(float $seconds): self
     {
         $this->imageDuration = $seconds;
+
         return $this;
     }
 
     public function export(string $outputPath): bool
     {
         if (empty($this->images)) {
-            throw new VideoAutomatorException("No images to process. Call generateImages() first.");
+            throw new VideoAutomatorException('No images to process. Call generateImages() first.');
         }
 
         $outDir = dirname($outputPath);
-        if (!is_dir($outDir)) {
+        if (! is_dir($outDir)) {
             @mkdir($outDir, 0777, true);
         }
 
-        $tempDir = sys_get_temp_dir() . '/video_automator_img_' . uniqid('', true);
-        if (!mkdir($tempDir, 0777, true) && !is_dir($tempDir)) {
+        $tempDir = sys_get_temp_dir().'/video_automator_img_'.uniqid('', true);
+        if (! mkdir($tempDir, 0777, true) && ! is_dir($tempDir)) {
             throw new VideoAutomatorException(sprintf('Directory "%s" was not created', $tempDir));
         }
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
             $targetDuration = count($this->images) * $this->imageDuration;
-            $durationStr = (string)$targetDuration;
+            $durationStr = (string) $targetDuration;
             $wordTimestamps = [];
             $ttsAudioPath = '';
 
-            if (!empty($this->voiceOptions)) {
+            if (! empty($this->voiceOptions)) {
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
-                $voiceService = new AiVoiceService();
-                $ttsAudioPath = $tempDir . '/tts.mp3';
-                
+                $voiceService = new AiVoiceService;
+                $ttsAudioPath = $tempDir.'/tts.mp3';
+
                 $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
-                    $captionsText, 
-                    $this->voiceOptions['provider'], 
-                    $this->voiceOptions['model'], 
-                    $this->voiceOptions['apiKey'], 
+                    $captionsText,
+                    $this->voiceOptions['provider'],
+                    $this->voiceOptions['model'],
+                    $this->voiceOptions['apiKey'],
                     $ttsAudioPath,
                     $this->voiceOptions['voiceId'] ?? '',
                     $this->voiceOptions['speed'] ?? 1.0
@@ -268,92 +301,68 @@ class ImageToVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
                     $ttsDuration = (float) trim((string) shell_exec($cmd));
-                    
-                    // Safety net: if audio is somehow longer than the chosen video duration, speed it up to fit perfectly
-                    if ($ttsDuration > $targetDuration) {
-                        $speedFactor = $ttsDuration / ($targetDuration - 0.5); // 0.5s margin
-                        if ($speedFactor > 1.0) {
-                            foreach ($wordTimestamps as &$wt) {
-                                $wt['start'] = round($wt['start'] / $speedFactor, 4);
-                                $wt['end'] = round($wt['end'] / $speedFactor, 4);
-                            }
-                            unset($wt);
-                            
-                            $tempTtsPath = $tempDir . '/tts_spedup.mp3';
-                            $tempoCmd = [
-                                $ffmpegPath, '-y', '-i', $ttsAudioPath,
-                                '-filter:a', "atempo={$speedFactor}",
-                                $tempTtsPath
-                            ];
-                            $tempoProc = new Process($tempoCmd);
-                            $tempoProc->run();
-                            if ($tempoProc->isSuccessful()) {
-                                $ttsAudioPath = $tempTtsPath;
-                            }
-                        }
-                    }
                 }
             }
 
             $clips = [];
-            
+
             foreach ($this->images as $index => $imageUrl) {
-                $imagePath = $tempDir . "/img_{$index}.jpg";
-                if (!@copy($imageUrl, $imagePath)) {
-                    throw new VideoAutomatorException("Failed to download generated image.");
+                $imagePath = $tempDir."/img_{$index}.jpg";
+                if (! @copy($imageUrl, $imagePath)) {
+                    throw new VideoAutomatorException('Failed to download generated image.');
                 }
 
-                $clipPath = $tempDir . "/clip_{$index}.mp4";
-                $captionText = !empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
+                $clipPath = $tempDir."/clip_{$index}.mp4";
+                $captionText = ! empty($this->captionChunks) ? ($this->captionChunks[$index] ?? '') : ($this->chunks[$index] ?? '');
                 $text = ($this->addCaptions && empty($this->voiceOptions)) ? $captionText : '';
                 $this->createClipFromImage($imagePath, $clipPath, $text);
-                
+
                 $clips[] = $clipPath;
             }
 
-            $listPath = $tempDir . '/list.txt';
-            $listContent = "";
+            $listPath = $tempDir.'/list.txt';
+            $listContent = '';
             foreach ($clips as $clip) {
-                $listContent .= "file '" . $clip . "'\n";
+                $listContent .= "file '".$clip."'\n";
             }
             file_put_contents($listPath, $listContent);
 
-            $rawOutput = ($this->audioPath || !empty($this->voiceOptions)) ? $tempDir . '/raw_output.mp4' : $outputPath;
-            
+            $rawOutput = ($this->audioPath || ! empty($this->voiceOptions)) ? $tempDir.'/raw_output.mp4' : $outputPath;
+
             $command = [
                 $ffmpegPath, '-y', '-f', 'concat', '-safe', '0', '-i', $listPath,
-                '-c', 'copy', $rawOutput
+                '-c', 'copy', $rawOutput,
             ];
 
             $process = new Process($command);
             $process->setTimeout(3600);
             $process->run();
 
-            if (!$process->isSuccessful()) {
-                throw new VideoAutomatorException("FFMPEG Concat Error: " . $process->getErrorOutput());
+            if (! $process->isSuccessful()) {
+                throw new VideoAutomatorException('FFMPEG Concat Error: '.$process->getErrorOutput());
             }
 
-            if (!empty($this->voiceOptions)) {
+            if (! empty($this->voiceOptions)) {
                 $mixedAudioPath = $ttsAudioPath;
                 if ($this->audioPath && file_exists($this->audioPath)) {
-                    $mixedAudioPath = $tempDir . '/mixed.mp3';
+                    $mixedAudioPath = $tempDir.'/mixed.mp3';
                     $mixCmd = [
                         $ffmpegPath, '-y', '-i', $ttsAudioPath, '-stream_loop', '-1', '-i', $this->audioPath,
                         '-filter_complex', '[0:a]volume=1.0,apad[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=longest',
                         '-t', $durationStr,
-                        $mixedAudioPath
+                        $mixedAudioPath,
                     ];
                     $mixProc = new Process($mixCmd);
                     $mixProc->setTimeout(3600);
                     $mixProc->run();
                 }
 
-                $assFile = $tempDir . '/subs.ass';
-                $assService = new AssSubtitleService();
+                $assFile = $tempDir.'/subs.ass';
+                $assService = new AssSubtitleService;
                 $assService->generateAssSubtitles($wordTimestamps, $this->captionStyleOptions, $assFile, $this->width, $this->height);
 
                 $fontPath = $this->config['font_path'] ?? '';
-                if (!empty($fontPath) && is_dir(dirname($fontPath))) {
+                if (! empty($fontPath) && is_dir(dirname($fontPath))) {
                     $assFilter = sprintf("ass='%s':fontsdir='%s'", str_replace("'", "\\'", $assFile), str_replace("'", "\\'", dirname($fontPath)));
                 } else {
                     $assFilter = sprintf("ass='%s'", str_replace("'", "\\'", $assFile));
@@ -363,14 +372,14 @@ class ImageToVideoEngine
                     $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
                     '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
-                    $outputPath
+                    $outputPath,
                 ];
                 $burnProc = new Process($burnCmd);
                 $burnProc->setTimeout(3600);
                 $burnProc->run();
 
-                if (!$burnProc->isSuccessful()) {
-                    throw new VideoAutomatorException("FFMPEG ASS Burn Error: " . $burnProc->getErrorOutput());
+                if (! $burnProc->isSuccessful()) {
+                    throw new VideoAutomatorException('FFMPEG ASS Burn Error: '.$burnProc->getErrorOutput());
                 }
 
             } elseif ($this->audioPath && file_exists($this->audioPath)) {
@@ -378,13 +387,13 @@ class ImageToVideoEngine
                     $ffmpegPath, '-y', '-i', $rawOutput, '-stream_loop', '-1', '-i', $this->audioPath,
                     '-map', '0:v:0', '-map', '1:a:0',
                     '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-t', $durationStr,
-                    $outputPath
+                    $outputPath,
                 ];
                 $audioProc = new Process($audioCmd);
                 $audioProc->setTimeout(3600);
                 $audioProc->run();
-                if (!$audioProc->isSuccessful()) {
-                    throw new VideoAutomatorException("FFMPEG Audio Merge Error: " . $audioProc->getErrorOutput());
+                if (! $audioProc->isSuccessful()) {
+                    throw new VideoAutomatorException('FFMPEG Audio Merge Error: '.$audioProc->getErrorOutput());
                 }
             }
 
@@ -397,13 +406,13 @@ class ImageToVideoEngine
     protected function splitIntoChunks(string $script): array
     {
         $sentences = preg_split('/(?<=[.!?])\s+|\n/', $script, -1, PREG_SPLIT_NO_EMPTY);
-        
+
         if (count($sentences) === 1 && strlen($script) > 80) {
             $aiKey = $this->config['ai_image_api_key'] ?? '';
-            if (!empty($aiKey)) {
+            if (! empty($aiKey)) {
                 $textService = new AiTextService($aiKey);
                 $formatted = $textService->smartFormatScript($script, 3);
-                if (!empty($formatted)) {
+                if (! empty($formatted)) {
                     $sentences = preg_split('/(?<=[.!?])\s+|\n/', $formatted, -1, PREG_SPLIT_NO_EMPTY);
                 }
             }
@@ -423,18 +432,18 @@ class ImageToVideoEngine
 
         if ($this->animation === 'zoompan' || $this->animation === 'ken-burns') {
             $filter = "[0:v]scale={$w2}:{$h2}:force_original_aspect_ratio=increase,crop={$w2}:{$h2},setsar=1";
-            
+
             $effects = [
                 "z='min(zoom+0.001,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
                 "z='if(eq(on,1),1.15,zoom-0.001)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'",
                 "z='1.1':x='(on/{$frames})*(iw-(iw/zoom))':y='ih/2-(ih/zoom/2)'",
                 "z='1.1':x='(1-(on/{$frames}))*(iw-(iw/zoom))':y='ih/2-(ih/zoom/2)'",
                 "z='1.1':x='iw/2-(iw/zoom/2)':y='(on/{$frames})*(ih-(ih/zoom))'",
-                "z='1.1':x='iw/2-(iw/zoom/2)':y='(1-(on/{$frames}))*(ih-(ih/zoom))'"
+                "z='1.1':x='iw/2-(iw/zoom/2)':y='(1-(on/{$frames}))*(ih-(ih/zoom))'",
             ];
-            
+
             $effect = $effects[array_rand($effects)];
-            
+
             $filter .= ",zoompan={$effect}:d={$frames}:s={$this->width}x{$this->height}:fps={$fps}";
         } else {
             $filter = "[0:v]scale={$this->width}:{$this->height}:force_original_aspect_ratio=increase,crop={$this->width}:{$this->height},setsar=1";
@@ -443,13 +452,13 @@ class ImageToVideoEngine
         if ($text !== '') {
             $limit = $this->getCaptionWordwrapLimit($this->width);
             $text = wordwrap($text, $limit, "\n");
-            $txtPath = dirname($outputPath) . '/' . basename($outputPath, '.mp4') . '.txt';
+            $txtPath = dirname($outputPath).'/'.basename($outputPath, '.mp4').'.txt';
             file_put_contents($txtPath, $text);
             $fontPath = $this->config['font_path'] ?? '';
-            
+
             $safeTxtPath = str_replace(['\\', ':'], ['/', '\\:'], $txtPath);
-            
-            $filter .= ',' . $this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
+
+            $filter .= ','.$this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
         }
 
         $command = [
@@ -457,23 +466,25 @@ class ImageToVideoEngine
             '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
             '-vf', $filter,
             '-map', '0:v:0', '-map', '1:a:0',
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string)$duration, '-pix_fmt', 'yuv420p',
-            $outputPath
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-t', (string) $duration, '-pix_fmt', 'yuv420p',
+            $outputPath,
         ];
 
         $process = new Process($command);
         $process->setTimeout(3600);
         $process->run();
 
-        if (!$process->isSuccessful()) {
-            throw new VideoAutomatorException("Failed to create clip: " . $process->getErrorOutput());
+        if (! $process->isSuccessful()) {
+            throw new VideoAutomatorException('Failed to create clip: '.$process->getErrorOutput());
         }
     }
 
     protected function cleanup(string $dir): void
     {
-        if (!is_dir($dir)) return;
-        $files = array_diff(scandir($dir), ['.','..']);
+        if (! is_dir($dir)) {
+            return;
+        }
+        $files = array_diff(scandir($dir), ['.', '..']);
         foreach ($files as $file) {
             @unlink("$dir/$file");
         }

@@ -9,6 +9,7 @@ use PhpVideoAutomator\Exceptions\VideoAutomatorException;
 class PexelsService
 {
     protected string $apiKey;
+
     protected Client $client;
 
     public function __construct(string $apiKey)
@@ -17,7 +18,7 @@ class PexelsService
         $this->client = new Client([
             'base_uri' => 'https://api.pexels.com/videos/',
             'headers' => [
-                'Authorization' => $this->apiKey
+                'Authorization' => $this->apiKey,
             ],
             'timeout' => 30,
         ]);
@@ -30,14 +31,14 @@ class PexelsService
                 'query' => [
                     'query' => $query,
                     'per_page' => $perPage,
-                ]
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
 
             return $data['videos'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch videos from Pexels: " . $e->getMessage());
+            throw new VideoAutomatorException('Failed to fetch videos from Pexels: '.$e->getMessage());
         }
     }
 
@@ -48,14 +49,14 @@ class PexelsService
                 'query' => [
                     'query' => $query,
                     'per_page' => $perPage,
-                ]
+                ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
 
             return $data['photos'] ?? [];
         } catch (Exception $e) {
-            throw new VideoAutomatorException("Failed to fetch images from Pexels: " . $e->getMessage());
+            throw new VideoAutomatorException('Failed to fetch images from Pexels: '.$e->getMessage());
         }
     }
 }
