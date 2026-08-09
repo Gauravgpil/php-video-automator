@@ -352,6 +352,7 @@ class ImageToVideoEngine
                     $this->voiceOptions['model'],
                     $this->voiceOptions['apiKey'],
                     $ttsAudioPath,
+                    $this->voiceOptions['voiceId'] ?? '',
                     $voiceSpeed
                 );
 
