@@ -496,7 +496,6 @@ class StockVideoEngine
                 }
             }
 
-            $perClipDuration = round($finalVideoDuration / $videoCount, 4);
 
             $clips = [];
 

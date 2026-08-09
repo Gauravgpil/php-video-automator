@@ -369,8 +369,6 @@ class ImageToVideoEngine
                 }
             }
 
-            $perImageDuration = $this->imageDuration;
-
             $clips = [];
 
             foreach ($this->images as $index => $imageUrl) {
