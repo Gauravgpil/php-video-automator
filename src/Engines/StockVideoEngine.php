@@ -461,24 +461,19 @@ class StockVideoEngine
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
             $videoCount = max(1, count($this->videos));
-            
-            if ($this->targetDuration > 0) {
-                $finalVideoDuration = $this->targetDuration;
-            } else {
-                $finalVideoDuration = $videoCount * $this->maxClipDuration;
-            }
-            
-            $this->maxClipDuration = $finalVideoDuration / $videoCount;
-            $durationStr = number_format($finalVideoDuration, 4, '.', '');
-            
+
+            $finalVideoDuration = $this->targetDuration > 0
+                ? (float) $this->targetDuration
+                : (float) ($videoCount * $this->maxClipDuration);
+
             $wordTimestamps = [];
             $ttsAudioPath = '';
-            $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
             if (! empty($this->voiceOptions)) {
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
                 $voiceService = new AiVoiceService;
                 $ttsAudioPath = $tempDir.'/tts.mp3';
+                $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
                 $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
                     $captionsText,
@@ -491,11 +486,15 @@ class StockVideoEngine
                 );
 
                 if (file_exists($ttsAudioPath)) {
-                    $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
-                    $ttsDuration = (float) trim((string) shell_exec($cmd));
+                    $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
+                    if ($ttsDuration > 0) {
+                        $finalVideoDuration = $ttsDuration;
+                    }
                 }
             }
 
+            $this->maxClipDuration = $finalVideoDuration / $videoCount;
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
 
@@ -564,7 +563,7 @@ class StockVideoEngine
                 $burnCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
-                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
+                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-shortest',
                     $outputPath,
                 ];
                 $burnProc = new Process($burnCmd);
@@ -616,7 +615,7 @@ class StockVideoEngine
             $filter .= ','.$this->getCaptionFilter($safeTxtPath, $this->width, $this->height);
         }
 
-        $durationStr = number_format($duration, 4, '.', '');
+        $durationStr = number_format($clipDuration, 4, '.', '');
         $command = [
             $ffmpegPath, '-y',
             '-stream_loop', '-1',

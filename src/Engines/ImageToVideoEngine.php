@@ -333,24 +333,19 @@ class ImageToVideoEngine
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
             $imageCount = max(1, count($this->images));
-            
-            if ($this->targetDuration > 0) {
-                $finalVideoDuration = $this->targetDuration;
-            } else {
-                $finalVideoDuration = $imageCount * $this->imageDuration;
-            }
-            
-            $this->imageDuration = $finalVideoDuration / $imageCount;
-            $durationStr = number_format($finalVideoDuration, 4, '.', '');
-            
+
+            $finalVideoDuration = $this->targetDuration > 0
+                ? (float) $this->targetDuration
+                : (float) ($imageCount * $this->imageDuration);
+
             $wordTimestamps = [];
             $ttsAudioPath = '';
-            $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
             if (! empty($this->voiceOptions)) {
                 $captionsText = implode(' ', $this->captionChunks ?: $this->chunks);
                 $voiceService = new AiVoiceService;
                 $ttsAudioPath = $tempDir.'/tts.mp3';
+                $voiceSpeed = $this->voiceOptions['speed'] ?? 1.0;
 
                 $wordTimestamps = $voiceService->generateVoiceoverWithTimestamps(
                     $captionsText,
@@ -362,12 +357,16 @@ class ImageToVideoEngine
                     $voiceSpeed
                 );
 
-                if (false && file_exists($ttsAudioPath)) {
-                    $cmd = sprintf('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>/dev/null', escapeshellarg($ttsAudioPath));
-                    $ttsDuration = (float) trim((string) shell_exec($cmd));
-                    // We don't dynamically stretch $finalVideoDuration here as it's pre-calibrated.
+                if (file_exists($ttsAudioPath)) {
+                    $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
+                    if ($ttsDuration > 0) {
+                        $finalVideoDuration = $ttsDuration;
+                    }
                 }
             }
+
+            $this->imageDuration = $finalVideoDuration / $imageCount;
+            $durationStr = number_format($finalVideoDuration, 4, '.', '');
 
             $clips = [];
 
@@ -437,7 +436,7 @@ class ImageToVideoEngine
                 $burnCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
-                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
+                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-shortest',
                     $outputPath,
                 ];
                 $burnProc = new Process($burnCmd);
