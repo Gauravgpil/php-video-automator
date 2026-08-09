@@ -166,8 +166,6 @@ class AiVoiceService
         for ($i = 0; $i < count($chars); $i++) {
             $char = $chars[$i];
 
-            // If it's a space, we break the word, UNLESS the next character is punctuation.
-            // Actually, a simpler way is to just append punctuation to the last word if currentWord is empty.
             if (trim((string) $char) === '') {
                 if ($currentWord !== '') {
                     $words[] = ['word' => $currentWord, 'start' => $currentStart, 'end' => $currentEnd];
@@ -178,7 +176,6 @@ class AiVoiceService
             }
 
             if ($currentWord === '') {
-                // If it's punctuation and we already have previous words, append to the last word
                 if (preg_match('/^[.,!?]+$/', $char) && count($words) > 0) {
                     $lastIdx = count($words) - 1;
                     $words[$lastIdx]['word'] .= $char;

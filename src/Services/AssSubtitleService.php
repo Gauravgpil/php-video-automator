@@ -182,8 +182,6 @@ class AssSubtitleService
             $lineStart = (float) ($lineWords[0]['start'] ?? 0);
             $lineEnd = (float) (end($lineWords)['end'] ?? $lineStart + 2.0);
 
-            // Add a small 0.5s padding to the end of the line for better readability
-            // If it's the last line, extend by 2.0s so it doesn't disappear before the video ends.
             if (isset($lines[$index + 1]) && ! empty($lines[$index + 1])) {
                 $nextLineStart = (float) ($lines[$index + 1][0]['start'] ?? $lineEnd);
                 $lineEnd = min($lineEnd + 0.5, $nextLineStart);
@@ -198,7 +196,7 @@ class AssSubtitleService
                 $wEnd = (float) ($w['end'] ?? $wStart + 0.3);
                 $wDurCs = max(1, (int) round(($wEnd - $wStart) * 100));
                 $wText = str_replace(['\\', '{', '}'], ['\\\\', '\{', '\}'], trim((string) $w['word']));
-                $karaokeText .= "{{\\{$karaokeMode}{$wDurCs}}{$wText} ";
+                $karaokeText .= "{\\{$karaokeMode}{$wDurCs}}{$wText} ";
             }
 
             $ass .= 'Dialogue: 0,'.$this->formatAssTime($lineStart).','.$this->formatAssTime($lineEnd).",Default,,0,0,0,,{$karaokeText}\n";
