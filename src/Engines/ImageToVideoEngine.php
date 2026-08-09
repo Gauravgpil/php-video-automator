@@ -332,9 +332,15 @@ class ImageToVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $imageCount = count($this->images);
-            $targetDuration = $imageCount * $this->imageDuration;
-            $finalVideoDuration = $targetDuration;
+            $imageCount = max(1, count($this->images));
+            
+            if ($this->targetDuration > 0) {
+                $finalVideoDuration = $this->targetDuration;
+            } else {
+                $finalVideoDuration = $imageCount * $this->imageDuration;
+            }
+            
+            $this->imageDuration = $finalVideoDuration / $imageCount;
             $durationStr = number_format($finalVideoDuration, 4, '.', '');
             
             $wordTimestamps = [];
@@ -363,7 +369,7 @@ class ImageToVideoEngine
                 }
             }
 
-            $perImageDuration = round($finalVideoDuration / $imageCount, 4);
+            $perImageDuration = $this->imageDuration;
 
             $clips = [];
 

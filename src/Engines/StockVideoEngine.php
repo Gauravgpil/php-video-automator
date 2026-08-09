@@ -460,9 +460,15 @@ class StockVideoEngine
 
         try {
             $ffmpegPath = $this->config['ffmpeg_path'] ?? 'ffmpeg';
-            $videoCount = count($this->videos);
-            $targetDuration = $videoCount * $this->maxClipDuration;
-            $finalVideoDuration = $targetDuration;
+            $videoCount = max(1, count($this->videos));
+            
+            if ($this->targetDuration > 0) {
+                $finalVideoDuration = $this->targetDuration;
+            } else {
+                $finalVideoDuration = $videoCount * $this->maxClipDuration;
+            }
+            
+            $this->maxClipDuration = $finalVideoDuration / $videoCount;
             $durationStr = number_format($finalVideoDuration, 4, '.', '');
             
             $wordTimestamps = [];
