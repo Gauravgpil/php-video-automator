@@ -485,7 +485,7 @@ class StockVideoEngine
                 if (file_exists($ttsAudioPath)) {
                     $ttsDuration = $this->probeDuration($ffmpegPath, $ttsAudioPath);
                     if ($ttsDuration > 0) {
-                        $finalVideoDuration = $ttsDuration;
+                        $finalVideoDuration = max($finalVideoDuration, $ttsDuration);
                     }
                 }
             }
@@ -560,7 +560,7 @@ class StockVideoEngine
                 $burnCmd = [
                     $ffmpegPath, '-y', '-i', $rawOutput, '-i', $mixedAudioPath,
                     '-filter_complex', "[0:v]{$assFilter}[v]", '-map', '[v]', '-map', '1:a',
-                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-shortest',
+                    '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'fast', '-t', $durationStr,
                     $outputPath,
                 ];
                 $burnProc = new Process($burnCmd);
@@ -577,7 +577,7 @@ class StockVideoEngine
                     '-i', $rawOutput,
                     '-stream_loop', '-1', '-i', $this->audioPath,
                     '-map', '0:v:0', '-map', '1:a:0',
-                    '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-t', $durationStr,
+                    '-c:v', 'copy', '-c:a', 'aac', '-t', $durationStr,
                     $outputPath,
                 ];
                 $audioProc = new Process($audioCmd);
