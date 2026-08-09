@@ -177,39 +177,6 @@ class StockVideoEngine
 
             [$results, $activeProvider] = $this->fetchFromProviders($providersToTry, $query, $apiKey);
 
-            foreach ($providersToTry as $p) {
-                $key = $apiKey ?: ($this->config[$p.'_api_key'] ?? '');
-
-                try {
-                    if ($p === 'pixabay') {
-                        if (empty($key)) {
-                            continue;
-                        }
-                        $service = new PixabayService($key);
-                        $results = $service->searchVideos($query, 40);
-                    } elseif ($p === 'pexels') {
-                        if (empty($key)) {
-                            continue;
-                        }
-                        $service = new PexelsService($key);
-                        $results = $service->searchVideos($query, 40);
-                    } elseif ($p === 'wikimedia') {
-                        $service = new WikimediaService;
-                        $results = $service->searchVideos($query, 15);
-                    } elseif ($p === 'archive') {
-                        $service = new InternetArchiveService;
-                        $results = $service->searchVideos($query, 15);
-                    }
-
-                    if (! empty($results)) {
-                        $activeProvider = $p;
-                        break;
-                    }
-                } catch (Throwable $e) {
-                    continue;
-                }
-            }
-
             $validUrls = [];
             if (! empty($results)) {
                 if ($textService && ! empty($chunk)) {
@@ -304,44 +271,6 @@ class StockVideoEngine
         return $this;
     }
 
-    private function buildFallbackPool(string $apiKey, array $providersToTry): array
-    {
-        $pool = [];
-        try {
-            $pixKey = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
-            if (! empty($pixKey)) {
-                $res = (new PixabayService($pixKey))->searchVideos('background abstract nature', 100);
-                foreach ($res as $video) {
-                    $u = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? '');
-                    if ($u) {
-                        $pool[] = $u;
-                    }
-                }
-            }
-
-            if (empty($pool)) {
-                $pexKey = $apiKey ?: ($this->config['pexels_api_key'] ?? '');
-                if (! empty($pexKey)) {
-                    $res = (new PexelsService($pexKey))->searchVideos('background abstract nature', 80);
-                    foreach ($res as $video) {
-                        foreach ($video['video_files'] ?? [] as $f) {
-                            if (in_array($f['quality'] ?? '', ['hd', 'sd'])) {
-                                $pool[] = $f['link'];
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (! empty($pool)) {
-                shuffle($pool);
-            }
-        } catch (Throwable $e) {
-        }
-
-        return $pool;
-    }
 
     private function fetchFromProviders(array $providers, string $query, string $apiKey): array
     {
@@ -366,78 +295,6 @@ class StockVideoEngine
         return [[], ''];
     }
 
-    private function extractValidUrls(array $results, string $activeProvider, string $chunk, ?AiTextService $textService, bool $randomize, array $usedUrls): array
-    {
-        if (empty($results)) {
-            return [];
-        }
-
-        if ($textService && ! empty($chunk) && ! empty($activeProvider)) {
-            $optionsDesc = [];
-            foreach (array_slice($results, 0, 10) as $idx => $item) {
-                $desc = match ($activeProvider) {
-                    'pixabay' => $item['tags'] ?? '',
-                    'pexels' => trim(str_replace('-', ' ', preg_replace('/-\d+\/?$/', '', basename(parse_url($item['url'] ?? '', PHP_URL_PATH) ?? '')))),
-                    default => $item['title'] ?? '',
-                };
-                $optionsDesc[$idx] = $desc;
-            }
-            try {
-                $bestIndex = $textService->selectBestMediaIndex($chunk, $optionsDesc);
-                if (isset($results[$bestIndex])) {
-                    $best = $results[$bestIndex];
-                    unset($results[$bestIndex]);
-                    array_unshift($results, $best);
-                }
-            } catch (Throwable $e) {
-            }
-        } elseif ($randomize) {
-            shuffle($results);
-        }
-
-        $validUrls = [];
-        foreach ($results as $video) {
-            $url = match ($activeProvider) {
-                'pixabay' => $video['videos']['large']['url'] ?? $video['videos']['medium']['url'] ?? $video['videos']['small']['url'] ?? $video['videos']['tiny']['url'] ?? '',
-                'pexels' => $this->extractPexelsUrl($video),
-                default => $video['url'] ?? '',
-            };
-            if ($url && ! in_array($url, $usedUrls)) {
-                $validUrls[] = $url;
-            }
-        }
-
-        return $validUrls;
-    }
-
-    private function extractPexelsUrl(array $video): string
-    {
-        $files = $video['video_files'] ?? [];
-        foreach ($files as $file) {
-            if (in_array($file['quality'] ?? '', ['uhd', 'hd'])) {
-                return $file['link'];
-            }
-        }
-        foreach ($files as $file) {
-            if (($file['quality'] ?? '') === 'sd') {
-                return $file['link'];
-            }
-        }
-
-        return $files[0]['link'] ?? '';
-    }
-
-    private function shiftFromFallback(array &$pool, array $usedUrls): ?string
-    {
-        while (! empty($pool)) {
-            $url = array_shift($pool);
-            if (! in_array($url, $usedUrls)) {
-                return $url;
-            }
-        }
-
-        return null;
-    }
 
     public function export(string $outputPath): bool
     {
@@ -625,54 +482,6 @@ class StockVideoEngine
         ];
 
         $this->runProcess($command, 'Standardize clip');
-    }
-
-    protected function burnSubtitlesAndMergeAudio(string $ffmpegPath, string $rawOutput, string $ttsAudioPath, array $wordTimestamps, string $outputPath, string $durationStr, string $tempDir): void
-    {
-        $mixedAudioPath = $ttsAudioPath;
-
-        if ($this->audioPath && file_exists($this->audioPath)) {
-            $mixedAudioPath = $tempDir.'/mixed.mp3';
-            $mixCmd = [
-                $ffmpegPath, '-y',
-                '-i', $ttsAudioPath,
-                '-stream_loop', '-1', '-i', $this->audioPath,
-                '-filter_complex', '[0:a]volume=1.0,apad[a1];[1:a]volume=0.2[a2];[a1][a2]amix=inputs=2:duration=longest',
-                '-t', $durationStr,
-                $mixedAudioPath,
-            ];
-            $proc = new Process($mixCmd);
-            $proc->setTimeout(300);
-            $proc->run();
-            if (! $proc->isSuccessful()) {
-                $mixedAudioPath = $ttsAudioPath;
-            }
-        }
-
-        $assFile = $tempDir.'/subs.ass';
-        $assService = new AssSubtitleService;
-        $assService->generateAssSubtitles($wordTimestamps, $this->captionStyleOptions, $assFile, $this->width, $this->height);
-
-        $fontPath = $this->config['font_path'] ?? '';
-        $assFilter = is_dir(dirname($fontPath)) && ! empty($fontPath)
-            ? sprintf("ass='%s':fontsdir='%s'", str_replace("'", "\\'", $assFile), str_replace("'", "\\'", dirname($fontPath)))
-            : sprintf("ass='%s'", str_replace("'", "\\'", $assFile));
-
-        $threads = max(1, (int) shell_exec('nproc 2>/dev/null') - 1 ?: 2);
-
-        $burnCmd = [
-            $ffmpegPath, '-y',
-            '-stream_loop', '-1', '-i', $rawOutput,
-            '-i', $mixedAudioPath,
-            '-filter_complex', "[0:v]{$assFilter}[v]",
-            '-map', '[v]', '-map', '1:a',
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-            '-threads', (string) $threads,
-            '-c:a', 'aac', '-b:a', '128k',
-            '-t', $durationStr,
-            $outputPath,
-        ];
-        $this->runProcess($burnCmd, 'Subtitle burn');
     }
 
     protected function probeDuration(string $ffmpegPath, string $filePath): float
