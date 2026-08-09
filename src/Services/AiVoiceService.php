@@ -14,9 +14,9 @@ class AiVoiceService
     public function __construct()
     {
         $this->client = new Client([
-            'timeout'         => 120.0,
+            'timeout' => 120.0,
             'connect_timeout' => 15.0,
-            'http_errors'     => true,
+            'http_errors' => true,
         ]);
     }
 
@@ -44,7 +44,7 @@ class AiVoiceService
                 'voice_settings' => [
                     'stability' => 0.5,
                     'similarity_boost' => 0.75,
-                    'speed'            => $elevenSpeed,
+                    'speed' => $elevenSpeed,
                 ],
             ],
         ]);
@@ -148,17 +148,17 @@ class AiVoiceService
         }
 
         $this->client->post('https://api.openai.com/v1/audio/speech', [
-            'sink'    => $outputFile,
+            'sink' => $outputFile,
             'headers' => [
                 'Authorization' => "Bearer {$apiKey}",
                 'Content-Type' => 'application/json',
             ],
             'json' => [
-                'model'           => 'tts-1',
-                'input'           => $text,
-                'voice'           => $voice,
+                'model' => 'tts-1',
+                'input' => $text,
+                'voice' => $voice,
                 'response_format' => 'mp3',
-                'speed'           => $openAiSpeed,
+                'speed' => $openAiSpeed,
             ],
         ]);
 

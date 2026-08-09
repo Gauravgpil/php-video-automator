@@ -62,6 +62,7 @@ class ImageToVideoEngine
     public function setTargetDuration(int $seconds): self
     {
         $this->targetDuration = max(1, $seconds);
+
         return $this;
     }
 
@@ -240,7 +241,7 @@ class ImageToVideoEngine
                 } elseif ($provider === 'wikimedia' || $provider === 'archive') {
                     $url = $item['url'] ?? null;
                 }
-                if ($url && !in_array($url, $usedUrls)) {
+                if ($url && ! in_array($url, $usedUrls)) {
                     $item['_final_url'] = $url;
                     $validItems[] = $item;
                 }
@@ -251,7 +252,7 @@ class ImageToVideoEngine
             }
 
             $selectedIndex = 0;
-            if ($textService && !empty($scene)) {
+            if ($textService && ! empty($scene)) {
                 $options = [];
                 foreach (array_slice($validItems, 0, 10) as $i => $item) {
                     $desc = '';
@@ -275,6 +276,7 @@ class ImageToVideoEngine
             }
 
             $result = $validItems[$selectedIndex] ?? $validItems[0];
+
             return $result['_final_url'] ?? null;
         } catch (Exception $e) {
             Log::warning("VideoAutomator Stock image fallback provider '{$provider}' failed: ".$e->getMessage());
@@ -460,7 +462,6 @@ class ImageToVideoEngine
         }
     }
 
-
     protected function probeDuration(string $ffmpegPath, string $filePath): float
     {
         $ffprobePath = str_replace('ffmpeg', 'ffprobe', $ffmpegPath);
@@ -470,6 +471,7 @@ class ImageToVideoEngine
             escapeshellarg($filePath)
         );
         $output = trim((string) shell_exec($cmd));
+
         return is_numeric($output) ? (float) $output : 0.0;
     }
 
@@ -478,6 +480,7 @@ class ImageToVideoEngine
         return array_map(static function (array $word) use ($ratio): array {
             $word['start'] = round($word['start'] / $ratio, 4);
             $word['end'] = round($word['end'] / $ratio, 4);
+
             return $word;
         }, $wordTimestamps);
     }
@@ -485,6 +488,7 @@ class ImageToVideoEngine
     protected function splitIntoChunks(string $script): array
     {
         $sentences = preg_split('/(?<=[.!?])\s+|\n/', trim($script), -1, PREG_SPLIT_NO_EMPTY);
+
         return array_values(array_filter(array_map('trim', $sentences)));
     }
 

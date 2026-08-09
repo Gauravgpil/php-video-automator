@@ -73,9 +73,10 @@ class AiTextService
                 return $keywords;
             }
 
-            if (!empty($content)) {
+            if (! empty($content)) {
                 $keywords = trim(str_replace(["'", '"', '.', ',', "\n"], '', $content));
-                return !empty($keywords) ? $keywords : $prompt;
+
+                return ! empty($keywords) ? $keywords : $prompt;
             }
         } catch (Exception $e) {
             Log::error('OpenAI Text Extraction Error: '.$e->getMessage());

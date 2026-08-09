@@ -31,6 +31,7 @@ class StockVideoEngine
     protected int $height = 1920;
 
     protected float $maxClipDuration = 5.0;
+
     protected ?int $targetDuration = null;
 
     public function __construct(array $config)
@@ -100,6 +101,7 @@ class StockVideoEngine
     public function withAudio(string $audioPath): self
     {
         $this->audioPath = $audioPath;
+
         return $this;
     }
 
@@ -111,6 +113,7 @@ class StockVideoEngine
     protected function splitIntoChunks(string $script): array
     {
         $sentences = preg_split('/(?<=[.!?])\s+|\n/', trim($script), -1, PREG_SPLIT_NO_EMPTY);
+
         return array_values(array_filter(array_map('trim', $sentences)));
     }
 
@@ -127,7 +130,7 @@ class StockVideoEngine
             $chunksToProcess = [$this->script];
         }
 
-        $chunksToProcess = !empty($this->chunks) ? $this->chunks : [$this->script];
+        $chunksToProcess = ! empty($this->chunks) ? $this->chunks : [$this->script];
         $numChunks = count($chunksToProcess);
 
         $videosPerChunk = array_fill(0, $numChunks, 0);
@@ -327,17 +330,19 @@ class StockVideoEngine
         $pool = [];
         try {
             $pixKey = $apiKey ?: ($this->config['pixabay_api_key'] ?? '');
-            if (!empty($pixKey)) {
+            if (! empty($pixKey)) {
                 $res = (new PixabayService($pixKey))->searchVideos('background abstract nature', 100);
                 foreach ($res as $video) {
                     $u = $video['videos']['large']['url'] ?? ($video['videos']['medium']['url'] ?? '');
-                    if ($u) $pool[] = $u;
+                    if ($u) {
+                        $pool[] = $u;
+                    }
                 }
             }
 
             if (empty($pool)) {
                 $pexKey = $apiKey ?: ($this->config['pexels_api_key'] ?? '');
-                if (!empty($pexKey)) {
+                if (! empty($pexKey)) {
                     $res = (new PexelsService($pexKey))->searchVideos('background abstract nature', 80);
                     foreach ($res as $video) {
                         foreach ($video['video_files'] ?? [] as $f) {
@@ -350,8 +355,11 @@ class StockVideoEngine
                 }
             }
 
-            if (!empty($pool)) shuffle($pool);
-        } catch (Throwable $e) {}
+            if (! empty($pool)) {
+                shuffle($pool);
+            }
+        } catch (Throwable $e) {
+        }
 
         return $pool;
     }
@@ -359,30 +367,33 @@ class StockVideoEngine
     private function fetchFromProviders(array $providers, string $query, string $apiKey): array
     {
         foreach ($providers as $p) {
-            $key = $apiKey ?: ($this->config[$p . '_api_key'] ?? '');
+            $key = $apiKey ?: ($this->config[$p.'_api_key'] ?? '');
             try {
                 $results = match ($p) {
-                    'pixabay' => !empty($key) ? (new PixabayService($key))->searchVideos($query, 40) : [],
-                    'pexels' => !empty($key) ? (new PexelsService($key))->searchVideos($query, 40) : [],
-                    'wikimedia' => (new WikimediaService())->searchVideos($query, 15),
-                    'archive' => (new InternetArchiveService())->searchVideos($query, 15),
+                    'pixabay' => ! empty($key) ? (new PixabayService($key))->searchVideos($query, 40) : [],
+                    'pexels' => ! empty($key) ? (new PexelsService($key))->searchVideos($query, 40) : [],
+                    'wikimedia' => (new WikimediaService)->searchVideos($query, 15),
+                    'archive' => (new InternetArchiveService)->searchVideos($query, 15),
                     default => [],
                 };
-                if (!empty($results)) {
+                if (! empty($results)) {
                     return [$results, $p];
                 }
             } catch (Throwable $e) {
                 continue;
             }
         }
+
         return [[], ''];
     }
 
     private function extractValidUrls(array $results, string $activeProvider, string $chunk, ?AiTextService $textService, bool $randomize, array $usedUrls): array
     {
-        if (empty($results)) return [];
+        if (empty($results)) {
+            return [];
+        }
 
-        if ($textService && !empty($chunk) && !empty($activeProvider)) {
+        if ($textService && ! empty($chunk) && ! empty($activeProvider)) {
             $optionsDesc = [];
             foreach (array_slice($results, 0, 10) as $idx => $item) {
                 $desc = match ($activeProvider) {
@@ -399,7 +410,8 @@ class StockVideoEngine
                     unset($results[$bestIndex]);
                     array_unshift($results, $best);
                 }
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) {
+            }
         } elseif ($randomize) {
             shuffle($results);
         }
@@ -411,10 +423,11 @@ class StockVideoEngine
                 'pexels' => $this->extractPexelsUrl($video),
                 default => $video['url'] ?? '',
             };
-            if ($url && !in_array($url, $usedUrls)) {
+            if ($url && ! in_array($url, $usedUrls)) {
                 $validUrls[] = $url;
             }
         }
+
         return $validUrls;
     }
 
@@ -422,20 +435,28 @@ class StockVideoEngine
     {
         $files = $video['video_files'] ?? [];
         foreach ($files as $file) {
-            if (in_array($file['quality'] ?? '', ['uhd', 'hd'])) return $file['link'];
+            if (in_array($file['quality'] ?? '', ['uhd', 'hd'])) {
+                return $file['link'];
+            }
         }
         foreach ($files as $file) {
-            if (($file['quality'] ?? '') === 'sd') return $file['link'];
+            if (($file['quality'] ?? '') === 'sd') {
+                return $file['link'];
+            }
         }
+
         return $files[0]['link'] ?? '';
     }
 
     private function shiftFromFallback(array &$pool, array $usedUrls): ?string
     {
-        while (!empty($pool)) {
+        while (! empty($pool)) {
             $url = array_shift($pool);
-            if (!in_array($url, $usedUrls)) return $url;
+            if (! in_array($url, $usedUrls)) {
+                return $url;
+            }
         }
+
         return null;
     }
 
@@ -619,14 +640,12 @@ class StockVideoEngine
         $this->runProcess($command, 'Standardize clip');
     }
 
-
-
     protected function burnSubtitlesAndMergeAudio(string $ffmpegPath, string $rawOutput, string $ttsAudioPath, array $wordTimestamps, string $outputPath, string $durationStr, string $tempDir): void
     {
         $mixedAudioPath = $ttsAudioPath;
 
         if ($this->audioPath && file_exists($this->audioPath)) {
-            $mixedAudioPath = $tempDir . '/mixed.mp3';
+            $mixedAudioPath = $tempDir.'/mixed.mp3';
             $mixCmd = [
                 $ffmpegPath, '-y',
                 '-i', $ttsAudioPath,
@@ -638,17 +657,17 @@ class StockVideoEngine
             $proc = new Process($mixCmd);
             $proc->setTimeout(300);
             $proc->run();
-            if (!$proc->isSuccessful()) {
+            if (! $proc->isSuccessful()) {
                 $mixedAudioPath = $ttsAudioPath;
             }
         }
 
-        $assFile = $tempDir . '/subs.ass';
-        $assService = new AssSubtitleService();
+        $assFile = $tempDir.'/subs.ass';
+        $assService = new AssSubtitleService;
         $assService->generateAssSubtitles($wordTimestamps, $this->captionStyleOptions, $assFile, $this->width, $this->height);
 
         $fontPath = $this->config['font_path'] ?? '';
-        $assFilter = is_dir(dirname($fontPath)) && !empty($fontPath)
+        $assFilter = is_dir(dirname($fontPath)) && ! empty($fontPath)
             ? sprintf("ass='%s':fontsdir='%s'", str_replace("'", "\\'", $assFile), str_replace("'", "\\'", dirname($fontPath)))
             : sprintf("ass='%s'", str_replace("'", "\\'", $assFile));
 
@@ -678,6 +697,7 @@ class StockVideoEngine
             escapeshellarg($filePath)
         );
         $output = trim((string) shell_exec($cmd));
+
         return is_numeric($output) ? (float) $output : 0.0;
     }
 
@@ -686,6 +706,7 @@ class StockVideoEngine
         return array_map(static function (array $word) use ($ratio): array {
             $word['start'] = round($word['start'] / $ratio, 4);
             $word['end'] = round($word['end'] / $ratio, 4);
+
             return $word;
         }, $wordTimestamps);
     }

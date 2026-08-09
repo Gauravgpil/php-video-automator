@@ -24,7 +24,7 @@ trait HandlesCaptions
             'provider' => $provider,
             'model' => $model,
             'apiKey' => $apiKey,
-            'voiceId' => !empty($voiceId) ? $voiceId : $model,
+            'voiceId' => ! empty($voiceId) ? $voiceId : $model,
             'speed' => $speed > 0 ? $speed : 1.0,
         ];
 
