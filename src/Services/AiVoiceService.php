@@ -22,6 +22,8 @@ class AiVoiceService
 
     public function generateVoiceoverWithTimestamps(string $text, string $provider, string $model, string $apiKey, string $outputFile, string $voiceId = '', float $speed = 1.0): array
     {
+        $text = preg_replace('/\s+([.,!?]+)/', '$1', $text);
+
         return match ($provider) {
             'eleven' => $this->generateElevenLabs($text, $model, $apiKey, $outputFile, $voiceId, $speed),
             'lmnt' => $this->generateLmnt($text, $model, $apiKey, $outputFile, $voiceId, $speed),
